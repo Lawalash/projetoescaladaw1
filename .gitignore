@@ -8,11 +8,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 
-
-backend/node_modules
-frontend/node-modules
-
-node_modules
+backend/.env
+.gitignore
 
 dist
 dist-ssr
