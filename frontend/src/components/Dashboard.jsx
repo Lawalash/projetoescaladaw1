@@ -110,6 +110,7 @@ function Dashboard({
   const [colaboradoresPorRole, setColaboradoresPorRole] = useState({});
   const [importandoPontos, setImportandoPontos] = useState(false);
   const [pontosImportStatus, setPontosImportStatus] = useState(null);
+  const [estoqueTipoSelecionado, setEstoqueTipoSelecionado] = useState('alimentos');
 
   const isPatrao = role === 'patrao';
   const isSupervisora = role === 'supervisora';
@@ -124,7 +125,7 @@ function Dashboard({
   const mostrarEstoque = isPatrao || isASG;
   const mostrarPlanilhas = isPatrao || isASG;
   const membroAtivoId = membroAtivo?.id || null;
-  const membroFiltro = isPatrao ? filtroMembroId : membroAtivoId;
+  const membroFiltro = isPatrao || isSupervisora ? filtroMembroId : membroAtivoId;
   const colaboradorAtualNome = membroAtivo?.nome;
   const colaboradoresDisponiveis = useMemo(() => {
     if (!podeCriarTarefas) return [];
@@ -345,7 +346,7 @@ function Dashboard({
   }, [carregarPontos]);
 
   const handleValidarTarefa = useCallback(async (tarefaId, status) => {
-    const membroDestino = isPatrao ? filtroMembroId : membroAtivoId;
+    const membroDestino = isPatrao || isSupervisora ? filtroMembroId : membroAtivoId;
     setTarefasErro(null);
     if (!membroDestino) {
       setTarefasErro('Selecione um colaborador para validar as atividades.');
@@ -433,7 +434,7 @@ function Dashboard({
 
   const handleRegistrarPonto = async (event) => {
     event.preventDefault();
-    const membroDestino = isPatrao ? filtroMembroId : membroAtivoId;
+    const membroDestino = isPatrao || isSupervisora ? filtroMembroId : membroAtivoId;
     if (!membroDestino) {
       setPontosErro('Selecione um colaborador para registrar o ponto.');
       if (onSolicitarTrocaMembro) {
@@ -619,6 +620,100 @@ function Dashboard({
       limpeza: calcular(painel?.inventario?.limpeza || [])
     };
   }, [painel]);
+
+  const inventarioDetalhado = useMemo(() => {
+    const normalizar = (lista = []) =>
+      lista.map((item) => {
+        const quantidadeAtual = Number(item.quantidadeAtual ?? item.quantidade_atual ?? 0);
+        const consumoDiario = Number(item.consumoDiario ?? item.consumo_diario ?? 0);
+        const coberturaDireta = item.coberturaDias ?? item.cobertura_dias;
+        const coberturaCalculada =
+          consumoDiario > 0 && Number.isFinite(consumoDiario)
+            ? Number((quantidadeAtual / consumoDiario).toFixed(1))
+            : null;
+
+        return {
+          categoria: item.categoria || 'Sem categoria',
+          nome: item.nome || item.nome_item,
+          unidade: item.unidade || '',
+          quantidadeAtual: Number.isFinite(quantidadeAtual) ? quantidadeAtual : 0,
+          consumoDiario: Number.isFinite(consumoDiario) ? consumoDiario : 0,
+          coberturaDias:
+            coberturaDireta !== undefined && coberturaDireta !== null
+              ? Number(coberturaDireta)
+              : coberturaCalculada,
+          validade: item.validade || null,
+          fornecedor: item.fornecedor || '',
+          lote: item.lote || '',
+          observacoes: item.observacoes || '',
+          atualizadoEm: item.atualizadoEm || item.atualizado_em || null
+        };
+      });
+
+    return {
+      alimentos: normalizar(painel?.inventarioDetalhado?.alimentos || []),
+      limpeza: normalizar(painel?.inventarioDetalhado?.limpeza || [])
+    };
+  }, [painel]);
+
+  const estoqueAgrupadoPorCategoria = useMemo(() => {
+    const agrupar = (lista = []) => {
+      const mapa = new Map();
+
+      lista.forEach((item) => {
+        const chave = item.categoria || 'Sem categoria';
+        if (!mapa.has(chave)) {
+          mapa.set(chave, {
+            categoria: chave,
+            itens: [],
+            totalQuantidade: 0
+          });
+        }
+
+        const grupo = mapa.get(chave);
+        grupo.itens.push(item);
+        grupo.totalQuantidade += Number(item.quantidadeAtual || 0);
+      });
+
+      return Array.from(mapa.values()).map((grupo) => ({
+        ...grupo,
+        totalQuantidade: Number(grupo.totalQuantidade.toFixed(2)),
+        itens: grupo.itens.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+      }));
+    };
+
+    return {
+      alimentos: agrupar(inventarioDetalhado.alimentos),
+      limpeza: agrupar(inventarioDetalhado.limpeza)
+    };
+  }, [inventarioDetalhado]);
+
+  const totalItensPorTipo = useMemo(
+    () => ({
+      alimentos: estoqueAgrupadoPorCategoria.alimentos.reduce((acc, grupo) => acc + grupo.itens.length, 0),
+      limpeza: estoqueAgrupadoPorCategoria.limpeza.reduce((acc, grupo) => acc + grupo.itens.length, 0)
+    }),
+    [estoqueAgrupadoPorCategoria]
+  );
+
+  const estoqueDetalheSelecionado = estoqueAgrupadoPorCategoria[estoqueTipoSelecionado] || [];
+
+  useEffect(() => {
+    if (
+      estoqueTipoSelecionado === 'alimentos' &&
+      !estoqueAgrupadoPorCategoria.alimentos.length &&
+      estoqueAgrupadoPorCategoria.limpeza.length
+    ) {
+      setEstoqueTipoSelecionado('limpeza');
+    }
+    if (
+      estoqueTipoSelecionado === 'limpeza' &&
+      !estoqueAgrupadoPorCategoria.limpeza.length &&
+      estoqueAgrupadoPorCategoria.alimentos.length
+    ) {
+      setEstoqueTipoSelecionado('alimentos');
+    }
+  }, [estoqueAgrupadoPorCategoria, estoqueTipoSelecionado]);
 
   const itensCriticosTotal = inventarioResumo.alimentos.itensCriticos + inventarioResumo.limpeza.itensCriticos;
   const alertasAtivos = painel?.alertas?.length || 0;
@@ -1349,6 +1444,141 @@ function Dashboard({
               </ul>
             </div>
           </section>
+
+          {isPatrao && (
+            <section className="estoque-detalhado">
+              <div className="estoque-detalhado__header">
+                <div>
+                  <h3>📦 Estoque detalhado por seção</h3>
+                  <p>Visualize a disponibilidade de cada item agrupado por categoria operacional.</p>
+                </div>
+                <div className="estoque-detalhado__resumo">
+                  <span>
+                    {totalItensPorTipo[estoqueTipoSelecionado] || 0} itens monitorados ·{' '}
+                    {estoqueDetalheSelecionado.length} seções
+                  </span>
+                </div>
+              </div>
+
+              <div className="estoque-detalhado__tabs">
+                <button
+                  type="button"
+                  className={
+                    estoqueTipoSelecionado === 'alimentos'
+                      ? 'estoque-detalhado__tab ativo'
+                      : 'estoque-detalhado__tab'
+                  }
+                  onClick={() => setEstoqueTipoSelecionado('alimentos')}
+                >
+                  🥕 Alimentos
+                </button>
+                <button
+                  type="button"
+                  className={
+                    estoqueTipoSelecionado === 'limpeza'
+                      ? 'estoque-detalhado__tab ativo'
+                      : 'estoque-detalhado__tab'
+                  }
+                  onClick={() => setEstoqueTipoSelecionado('limpeza')}
+                >
+                  🧼 Produtos de limpeza
+                </button>
+              </div>
+
+              {estoqueDetalheSelecionado.length ? (
+                <div className="estoque-detalhado__grid">
+                  {estoqueDetalheSelecionado.map((categoria) => {
+                    const categoriaCritica = categoria.itens.some(
+                      (item) =>
+                        Number(item.quantidadeAtual || 0) <= 0 ||
+                        (item.coberturaDias !== null &&
+                          item.coberturaDias !== undefined &&
+                          Number(item.coberturaDias) <= 2)
+                    );
+
+                    return (
+                      <article
+                        key={`${estoqueTipoSelecionado}-${categoria.categoria}`}
+                        className={
+                          categoriaCritica
+                            ? 'estoque-detalhado__card critico'
+                            : 'estoque-detalhado__card'
+                        }
+                      >
+                        <header className="estoque-detalhado__card-header">
+                          <div>
+                            <h4>{categoria.categoria}</h4>
+                            <span>{categoria.itens.length} itens acompanhados</span>
+                          </div>
+                          {categoriaCritica && <span className="estoque-detalhado__badge">atenção</span>}
+                        </header>
+
+                        <ul className="estoque-detalhado__lista">
+                          {categoria.itens.map((item) => {
+                            const itemCritico =
+                              Number(item.quantidadeAtual || 0) <= 0 ||
+                              (item.coberturaDias !== null &&
+                                item.coberturaDias !== undefined &&
+                                Number(item.coberturaDias) <= 2);
+
+                            return (
+                              <li
+                                key={`${categoria.categoria}-${item.nome}`}
+                                className={itemCritico ? 'estoque-item critico' : 'estoque-item'}
+                              >
+                                <div className="estoque-item__titulo">
+                                  <strong>{item.nome}</strong>
+                                  <span>
+                                    {formatarNumero(item.quantidadeAtual)}
+                                    {item.unidade ? ` ${item.unidade}` : ''}
+                                  </span>
+                                </div>
+                                <div className="estoque-item__meta">
+                                  <span>
+                                    ⏳
+                                    {item.coberturaDias !== null && item.coberturaDias !== undefined
+                                      ? ` ${item.coberturaDias} dias`
+                                      : ' Sem previsão'}
+                                  </span>
+                                  {item.validade && (
+                                    <span>📅 {formatarDataSimples(item.validade)}</span>
+                                  )}
+                                </div>
+                                {(item.fornecedor || item.lote) && (
+                                  <div className="estoque-item__extra">
+                                    {item.fornecedor && <span>Fornecedor: {item.fornecedor}</span>}
+                                    {item.lote && <span>Lote: {item.lote}</span>}
+                                  </div>
+                                )}
+                                {item.observacoes && (
+                                  <p className="estoque-item__obs">{item.observacoes}</p>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="estoque-detalhado__vazio">
+                  <p>Nenhum item cadastrado para este tipo de estoque.</p>
+                  <button
+                    type="button"
+                    className="estoque-detalhado__alternar"
+                    onClick={() =>
+                      setEstoqueTipoSelecionado((tipoAtual) =>
+                        tipoAtual === 'alimentos' ? 'limpeza' : 'alimentos'
+                      )
+                    }
+                  >
+                    Ver outra seção
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
 
           <section className="cronograma-inventario">
             <div className="card cronograma">

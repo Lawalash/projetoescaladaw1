@@ -189,6 +189,14 @@ function App() {
     setAuthToken(data.token);
     const equipe = data?.membrosEquipe || [];
     setMembrosEquipe(equipe);
+
+    if (precisaSelecionarMembro(data.usuario.role)) {
+      const storageKey = `${STORAGE_KEY}:membro:${data.usuario.id}`;
+      localStorage.removeItem(storageKey);
+      setMembroAtivo(null);
+      setModalMembrosAberto(true);
+    }
+
     sincronizarMembroAtivo(data.usuario, equipe);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     setAbaAtiva('dashboard');

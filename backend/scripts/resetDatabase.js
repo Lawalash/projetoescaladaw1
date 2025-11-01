@@ -16,6 +16,8 @@ const {
   DB_NAME = 'qw1_relatorios'
 } = process.env;
 
+const BASE_DATA = new Date(Date.UTC(2024, 9, 31, 0, 0, 0));
+
 const TABLES = [
   'usuarios',
   'logs_envio',
@@ -26,6 +28,10 @@ const TABLES = [
   'estoque_itens',
   'estoque_limpeza',
   'estoque_alimentos',
+  'tarefas_execucoes',
+  'tarefas',
+  'pontos_registros',
+  'equipe_membros',
   'cronograma_atividades',
   'agendamentos_clinicos',
   'consultorias_familiares',
@@ -43,9 +49,59 @@ function diasAtras(base, dias) {
   return data;
 }
 
+async function colunaExiste(connection, tabela, coluna) {
+  const [rows] = await connection.execute(
+    `SELECT 1
+       FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND COLUMN_NAME = ?
+      LIMIT 1`,
+    [tabela, coluna]
+  );
+
+  return rows.length > 0;
+}
+
+async function prepararColunasDestino(connection) {
+  const possuiDestinoId = await colunaExiste(connection, 'tarefas', 'destino_id');
+  const possuiDestinoMembroId = await colunaExiste(connection, 'tarefas', 'destino_membro_id');
+
+  if (possuiDestinoId && !possuiDestinoMembroId) {
+    await connection
+      .execute('ALTER TABLE tarefas CHANGE destino_id destino_membro_id INT NULL')
+      .catch(() => {});
+  }
+
+  if (!(await colunaExiste(connection, 'tarefas', 'destino_membro_id'))) {
+    await connection
+      .execute('ALTER TABLE tarefas ADD COLUMN destino_membro_id INT NULL AFTER destino_tipo')
+      .catch(() => {});
+  }
+
+  const possuiDestinoNomeLegado = await colunaExiste(connection, 'tarefas', 'destino_nome');
+  const possuiDestinoNomeSnapshot = await colunaExiste(connection, 'tarefas', 'destino_nome_snapshot');
+
+  if (possuiDestinoNomeLegado && !possuiDestinoNomeSnapshot) {
+    await connection
+      .execute(
+        'ALTER TABLE tarefas CHANGE destino_nome destino_nome_snapshot VARCHAR(180) NULL'
+      )
+      .catch(() => {});
+  }
+
+  if (!possuiDestinoNomeSnapshot) {
+    await connection
+      .execute(
+        'ALTER TABLE tarefas ADD COLUMN destino_nome_snapshot VARCHAR(180) NULL AFTER destino_membro_id'
+      )
+      .catch(() => {});
+  }
+}
+
 async function criarEstrutura(connection) {
   const ddlStatements = [
-    `CREATE TABLE usuarios (
+    `CREATE TABLE IF NOT EXISTS usuarios (
       id INT AUTO_INCREMENT PRIMARY KEY,
       nome VARCHAR(120) NOT NULL,
       email VARCHAR(160) NOT NULL UNIQUE,
@@ -54,7 +110,7 @@ async function criarEstrutura(connection) {
       criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
       atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE residentes (
+    `CREATE TABLE IF NOT EXISTS residentes (
       id INT AUTO_INCREMENT PRIMARY KEY,
       nome VARCHAR(120) NOT NULL,
       data_nascimento DATE NOT NULL,
@@ -62,21 +118,21 @@ async function criarEstrutura(connection) {
       ala VARCHAR(60) DEFAULT NULL,
       criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE leitos (
+    `CREATE TABLE IF NOT EXISTS leitos (
       id INT AUTO_INCREMENT PRIMARY KEY,
       codigo VARCHAR(20) NOT NULL,
       ala VARCHAR(60) DEFAULT NULL,
       ocupado TINYINT(1) DEFAULT 0,
       atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE metricas_medicacao (
+    `CREATE TABLE IF NOT EXISTS metricas_medicacao (
       id INT AUTO_INCREMENT PRIMARY KEY,
       data_ref DATE NOT NULL,
       ala VARCHAR(60) NOT NULL,
       taxa_aderencia DECIMAL(5,2) DEFAULT 0,
       criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE metricas_saude (
+    `CREATE TABLE IF NOT EXISTS metricas_saude (
       id INT AUTO_INCREMENT PRIMARY KEY,
       data_ref DATE NOT NULL,
       pressao_sistolica INT DEFAULT NULL,
@@ -92,7 +148,7 @@ async function criarEstrutura(connection) {
       incidentes_clinicos INT DEFAULT 0,
       criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE consultas_medicas (
+    `CREATE TABLE IF NOT EXISTS consultas_medicas (
       id INT AUTO_INCREMENT PRIMARY KEY,
       residente_id INT DEFAULT NULL,
       data_agendada DATETIME NOT NULL,
@@ -100,7 +156,7 @@ async function criarEstrutura(connection) {
       especialidade VARCHAR(120) DEFAULT NULL,
       observacoes TEXT DEFAULT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE consultorias_familiares (
+    `CREATE TABLE IF NOT EXISTS consultorias_familiares (
       id INT AUTO_INCREMENT PRIMARY KEY,
       residente_id INT DEFAULT NULL,
       data_agendada DATETIME NOT NULL,
@@ -108,7 +164,7 @@ async function criarEstrutura(connection) {
       responsavel VARCHAR(120) DEFAULT NULL,
       observacoes TEXT DEFAULT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE agendamentos_clinicos (
+    `CREATE TABLE IF NOT EXISTS agendamentos_clinicos (
       id INT AUTO_INCREMENT PRIMARY KEY,
       residente_id INT DEFAULT NULL,
       data_agendada DATETIME NOT NULL,
@@ -116,7 +172,7 @@ async function criarEstrutura(connection) {
       responsavel VARCHAR(120) DEFAULT NULL,
       observacoes TEXT DEFAULT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE cronograma_atividades (
+    `CREATE TABLE IF NOT EXISTS cronograma_atividades (
       id INT AUTO_INCREMENT PRIMARY KEY,
       data DATE NOT NULL,
       hora_inicio TIME DEFAULT NULL,
@@ -127,7 +183,7 @@ async function criarEstrutura(connection) {
       tipo VARCHAR(80) DEFAULT NULL,
       observacoes TEXT DEFAULT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE estoque_alimentos (
+    `CREATE TABLE IF NOT EXISTS estoque_alimentos (
       id INT AUTO_INCREMENT PRIMARY KEY,
       categoria VARCHAR(120) NOT NULL,
       quantidade_atual DECIMAL(10,2) DEFAULT 0,
@@ -137,7 +193,7 @@ async function criarEstrutura(connection) {
       nivel_minimo DECIMAL(10,2) DEFAULT 0,
       atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE estoque_limpeza (
+    `CREATE TABLE IF NOT EXISTS estoque_limpeza (
       id INT AUTO_INCREMENT PRIMARY KEY,
       categoria VARCHAR(120) NOT NULL,
       quantidade_atual DECIMAL(10,2) DEFAULT 0,
@@ -147,7 +203,7 @@ async function criarEstrutura(connection) {
       nivel_minimo DECIMAL(10,2) DEFAULT 0,
       atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE estoque_alertas (
+    `CREATE TABLE IF NOT EXISTS estoque_alertas (
       id INT AUTO_INCREMENT PRIMARY KEY,
       tipo_alerta VARCHAR(80) NOT NULL,
       mensagem VARCHAR(255) NOT NULL,
@@ -155,7 +211,7 @@ async function criarEstrutura(connection) {
       criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
       resolvido TINYINT(1) DEFAULT 0
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE estoque_planilhas (
+    `CREATE TABLE IF NOT EXISTS estoque_planilhas (
       id INT AUTO_INCREMENT PRIMARY KEY,
       nome_original VARCHAR(160) NOT NULL,
       caminho_arquivo VARCHAR(255) NOT NULL,
@@ -163,7 +219,7 @@ async function criarEstrutura(connection) {
       total_registros INT DEFAULT 0,
       criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE estoque_itens (
+    `CREATE TABLE IF NOT EXISTS estoque_itens (
       id INT AUTO_INCREMENT PRIMARY KEY,
       tipo_estoque VARCHAR(40) NOT NULL,
       categoria VARCHAR(120) DEFAULT NULL,
@@ -177,7 +233,53 @@ async function criarEstrutura(connection) {
       observacoes TEXT DEFAULT NULL,
       atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE config_envio (
+    `CREATE TABLE IF NOT EXISTS equipe_membros (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      usuario_id INT NOT NULL,
+      nome VARCHAR(150) NOT NULL,
+      role ENUM('asg','enfermaria','supervisora') NOT NULL,
+      ativo TINYINT(1) DEFAULT 1,
+      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+      atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY equipe_membros_unique (usuario_id, nome)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+    `CREATE TABLE IF NOT EXISTS tarefas (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      titulo VARCHAR(180) NOT NULL,
+      descricao TEXT,
+      role_destino ENUM('asg','enfermaria','supervisora') NOT NULL,
+      recorrencia ENUM('unica','diaria','semanal') DEFAULT 'unica',
+      destino_tipo ENUM('individual','equipe') DEFAULT 'individual',
+      destino_membro_id INT NULL,
+      destino_nome_snapshot VARCHAR(180) NULL,
+      criado_por INT,
+      data_limite DATE,
+      documento_url VARCHAR(255),
+      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+    `CREATE TABLE IF NOT EXISTS tarefas_execucoes (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      tarefa_id INT NOT NULL,
+      membro_id INT,
+      status ENUM('pendente','concluida','nao_realizada') DEFAULT 'pendente',
+      observacao TEXT,
+      anexo_url VARCHAR(255),
+      concluido_em DATETIME DEFAULT NULL,
+      destino_nome_snapshot VARCHAR(180),
+      atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY tarefa_execucao_unica (tarefa_id, membro_id),
+      CONSTRAINT fk_execucao_tarefa_seed FOREIGN KEY (tarefa_id) REFERENCES tarefas(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+    `CREATE TABLE IF NOT EXISTS pontos_registros (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      membro_id INT NOT NULL,
+      usuario_id INT NOT NULL,
+      membro_nome VARCHAR(150),
+      tipo ENUM('entrada','saida','intervalo') DEFAULT 'entrada',
+      registrado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+      observacao VARCHAR(255)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+    `CREATE TABLE IF NOT EXISTS config_envio (
       id INT AUTO_INCREMENT PRIMARY KEY,
       tipo_envio ENUM('email','whatsapp') NOT NULL,
       destinatario VARCHAR(160) NOT NULL,
@@ -185,7 +287,7 @@ async function criarEstrutura(connection) {
       ativo TINYINT(1) DEFAULT 1,
       criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE logs_envio (
+    `CREATE TABLE IF NOT EXISTS logs_envio (
       id INT AUTO_INCREMENT PRIMARY KEY,
       tipo VARCHAR(40) NOT NULL,
       destinatario VARCHAR(160) NOT NULL,
@@ -193,7 +295,7 @@ async function criarEstrutura(connection) {
       mensagem_erro TEXT DEFAULT NULL,
       criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-    `CREATE TABLE config_sistema (
+    `CREATE TABLE IF NOT EXISTS config_sistema (
       id INT AUTO_INCREMENT PRIMARY KEY,
       chave VARCHAR(120) NOT NULL UNIQUE,
       valor VARCHAR(255) NOT NULL,
@@ -205,10 +307,12 @@ async function criarEstrutura(connection) {
   for (const statement of ddlStatements) {
     await connection.execute(statement);
   }
+
+  await prepararColunasDestino(connection);
 }
 
 async function popularDados(connection) {
-  const hoje = new Date();
+  const hoje = new Date(BASE_DATA);
 
   const residentes = [
     { nome: 'Maria das Dores', nascimento: '1941-05-14', status: 'ativo', ala: 'Ala Norte' },
@@ -240,7 +344,7 @@ async function popularDados(connection) {
   }
 
   const alas = ['Ala Norte', 'Ala Sul', 'Ala Leste'];
-  for (let dia = 0; dia < 60; dia += 1) {
+  for (let dia = 0; dia < 31; dia += 1) {
     const dataRef = diasAtras(hoje, dia);
     const fatorSazonal = Math.sin(dia / 6);
 
@@ -519,15 +623,19 @@ async function main() {
     await connection.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
     await connection.query(`USE \`${DB_NAME}\``);
 
-    console.log('🧹 Removendo tabelas antigas...');
+    console.log('🏗️  Garantindo estrutura...');
+    await criarEstrutura(connection);
+
+    console.log('🧹 Limpando dados antigos (TRUNCATE)...');
     await connection.query('SET FOREIGN_KEY_CHECKS = 0');
     for (const table of TABLES) {
-      await connection.query(`DROP TABLE IF EXISTS \`${table}\``);
+      await connection.query(`TRUNCATE TABLE \`${table}\``).catch((error) => {
+        if (error?.code !== 'ER_NO_SUCH_TABLE') {
+          throw error;
+        }
+      });
     }
     await connection.query('SET FOREIGN_KEY_CHECKS = 1');
-
-    console.log('🏗️  Criando estrutura...');
-    await criarEstrutura(connection);
 
     console.log('🌱 Inserindo dados de exemplo...');
     await popularDados(connection);
