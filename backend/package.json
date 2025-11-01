@@ -1,7 +1,7 @@
 {
   "name": "qw1-backend",
   "version": "1.0.0",
-  "description": "Backend API para AuroraCare - Lar de idosos",
+  "description": "Backend API para A2 Data Monitoramento Ocupacional",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

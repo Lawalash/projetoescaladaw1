@@ -350,7 +350,7 @@ async function popularDados(connection) {
         atividade.inicio,
         atividade.fim,
         atividade.atividade,
-        'Equipe AuroraCare',
+        'Equipe A2 Data',
         atividade.ala,
         atividade.tipo,
         'Atividade planejada'
@@ -414,9 +414,10 @@ async function popularDados(connection) {
   }
 
   const usuarios = [
-    { nome: 'Direção Aurora', email: 'direcao@auroracare.com', senha: 'patroes123', role: 'patrao' },
-    { nome: 'Time de Limpeza', email: 'asg@auroracare.com', senha: 'limpeza123', role: 'asg' },
-    { nome: 'Coordenação Enfermagem', email: 'enfermaria@auroracare.com', senha: 'enfermaria123', role: 'enfermaria' }
+    { nome: 'Direção A2 Data', email: 'direcao@a2data.com.br', senha: 'patroes123', role: 'patrao' },
+    { nome: 'Supervisora Vitória Barboza Silveira', email: 'supervisao@a2data.com.br', senha: 'supervisao123', role: 'supervisora' },
+    { nome: 'Equipe ASG', email: 'asg@a2data.com.br', senha: 'limpeza123', role: 'asg' },
+    { nome: 'Técnica de Enfermagem', email: 'enfermagem@a2data.com.br', senha: 'enfermagem123', role: 'enfermaria' }
   ];
 
   for (const usuario of usuarios) {
@@ -425,6 +426,43 @@ async function popularDados(connection) {
        VALUES (?, ?, ?, ?, NOW())`,
       [usuario.nome, usuario.email, hashPassword(usuario.senha), usuario.role]
     );
+  }
+
+  const [usuariosCriados] = await connection.execute(
+    'SELECT id, role FROM usuarios'
+  );
+
+  const membrosASG = ['Carlos Alberto Duarte', 'Elaine Pacheco', 'Marcos Vinícius', 'Roberta Castro'];
+  const membrosEnfermagem = ['Téc. Fernanda Costa'];
+
+  for (const usuario of usuariosCriados) {
+    if (usuario.role === 'asg' || usuario.role === 'supervisora') {
+      for (const nome of membrosASG) {
+        await connection.execute(
+          `INSERT INTO equipe_membros (usuario_id, nome, role, ativo, criado_em)
+           VALUES (?, ?, 'asg', 1, NOW())`,
+          [usuario.id, nome]
+        );
+      }
+    }
+
+    if (usuario.role === 'enfermaria') {
+      for (const nome of membrosEnfermagem) {
+        await connection.execute(
+          `INSERT INTO equipe_membros (usuario_id, nome, role, ativo, criado_em)
+           VALUES (?, ?, 'enfermaria', 1, NOW())`,
+          [usuario.id, nome]
+        );
+      }
+    }
+
+    if (usuario.role === 'supervisora') {
+      await connection.execute(
+        `INSERT INTO equipe_membros (usuario_id, nome, role, ativo, criado_em)
+         VALUES (?, 'Vitória Barboza Silveira', 'supervisora', 1, NOW())`,
+        [usuario.id]
+      );
+    }
   }
 
   const itensEstoque = [

@@ -11,16 +11,18 @@ import { login as loginService, obterEquipeOperacional, setAuthToken } from './s
 const ROLE_LABELS = {
   patrao: 'Direção',
   asg: 'Serviços Gerais',
-  enfermaria: 'Enfermagem'
+  enfermaria: 'Enfermagem',
+  supervisora: 'Supervisão ASG'
 };
 
 const ROLE_SUBTITLES = {
   patrao: 'Acompanhe indicadores estratégicos e o desempenho de toda a equipe.',
-  asg: 'Organize a limpeza, estoques e tarefas operacionais do lar.',
-  enfermaria: 'Monitore cuidados clínicos, escalas e medicações sem perder o controle.'
+  asg: 'Organize rotinas de limpeza, estoque e suporte operacional do lar.',
+  enfermaria: 'Monitore cuidados clínicos, escalas e medicações com segurança.',
+  supervisora: 'Coordene as entregas da equipe de serviços gerais e acompanhe os apontamentos.'
 };
 
-const STORAGE_KEY = 'auroracare.auth';
+const STORAGE_KEY = 'a2data.monitoramento.auth';
 
 function App() {
   const [usuario, setUsuario] = useState(null);
@@ -161,16 +163,23 @@ function App() {
 
     if (usuario.role === 'patrao') {
       return [
-        { id: 'dashboard', label: '📊 Painel Integrado' },
-        { id: 'relatorio', label: '🗂️ Relatório da equipe' },
-        { id: 'config', label: '📣 Comunicações' },
-        { id: 'documentacao', label: '📘 Documentação' }
+        { id: 'dashboard', label: 'Painel integrado' },
+        { id: 'relatorio', label: 'Relatório da equipe' },
+        { id: 'config', label: 'Comunicações' },
+        { id: 'documentacao', label: 'Documentação' }
+      ];
+    }
+
+    if (usuario.role === 'supervisora') {
+      return [
+        { id: 'dashboard', label: 'Painel da supervisão' },
+        { id: 'documentacao', label: 'Documentação' }
       ];
     }
 
     return [
-      { id: 'dashboard', label: usuario.role === 'asg' ? '🧼 Operações e estoque' : '🩺 Cuidados clínicos' },
-      { id: 'documentacao', label: '📘 Documentação' }
+      { id: 'dashboard', label: usuario.role === 'asg' ? 'Operações e estoque' : 'Cuidados clínicos' },
+      { id: 'documentacao', label: 'Documentação' }
     ];
   }, [usuario]);
 
@@ -211,7 +220,7 @@ function App() {
     <div className="App">
       <header className="App-header">
         <div className="header-content">
-          <h1>🏡 AuroraCare — Portal Operacional</h1>
+          <h1>A2 Data · Monitoramento Ocupacional</h1>
           <p className="subtitle">{subtitle}</p>
         </div>
 
@@ -270,11 +279,7 @@ function App() {
 
       <footer className="App-footer">
         <p>
-          AuroraCare ©
-          {' '}
-          {new Date().getFullYear()}
-          {' — '}
-          cuidado humanizado apoiado por dados.
+          A2 Data Monitoramento Ocupacional · {new Date().getFullYear()} · Tecnologia a serviço do cuidado.
         </p>
       </footer>
 

@@ -89,13 +89,25 @@ export const listarTarefasOperacionais = async ({ role, membroId } = {}) => {
   return response.data;
 };
 
-export const criarTarefaOperacional = async ({ titulo, descricao, roleDestino, dataLimite, documentoUrl }) => {
+export const criarTarefaOperacional = async ({
+  titulo,
+  descricao,
+  roleDestino,
+  dataLimite,
+  documentoUrl,
+  recorrencia,
+  destinoTipo,
+  destinatarios
+}) => {
   const response = await api.post('/lar/tarefas', {
     titulo,
     descricao,
     roleDestino,
     dataLimite,
-    documentoUrl
+    documentoUrl,
+    recorrencia,
+    destinoTipo,
+    destinatarios
   });
   return response.data;
 };
@@ -127,6 +139,19 @@ export const listarPontosColaboradores = async ({ role, membroId, limite } = {})
   if (limite) params.limite = limite;
 
   const response = await api.get('/lar/pontos', { params });
+  return response.data;
+};
+
+export const importarPontosColaboradores = async ({ arquivo }) => {
+  const formData = new FormData();
+  formData.append('arquivo', arquivo);
+
+  const response = await api.post('/lar/pontos/importar', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  });
+
   return response.data;
 };
 

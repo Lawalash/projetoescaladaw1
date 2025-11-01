@@ -1,4 +1,4 @@
-// AuroraCare Backend - Servidor Principal
+// A2 Data Monitoramento Ocupacional - Servidor Principal
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -46,7 +46,8 @@ app.use(express.urlencoded({ extended: true }));
 // Garantir pastas de upload
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 const planilhasDir = path.join(uploadsDir, 'planilhas');
-[uploadsDir, planilhasDir].forEach((dir) => {
+const pontosDir = path.join(uploadsDir, 'pontos');
+[uploadsDir, planilhasDir, pontosDir].forEach((dir) => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -72,7 +73,7 @@ app.use('/api/lar', authenticate, larRoutes);
 // Rota de teste
 app.get('/', (req, res) => {
   res.json({
-    name: 'AuroraCare API - Monitoramento do Lar',
+    name: 'A2 Data Monitoramento Ocupacional - API',
     version: '1.0.0',
     endpoints: {
       health: '/health',
@@ -110,7 +111,7 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`
 ╔════════════════════════════════════════╗
-║   AuroraCare Backend API               ║
+║   A2 Data · Monitoramento Ocupacional  ║
 ║   Porta: ${PORT}                         ║
 ║   Ambiente: ${process.env.NODE_ENV || 'development'}              ║
 ║   CORS: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}   ║

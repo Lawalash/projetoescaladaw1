@@ -1,8 +1,8 @@
-# AuroraCare — Monitoramento de Lar de Idosos
+# A2 Data Monitoramento Ocupacional — Monitoramento de Lar de Idosos
 
 ## 📋 Visão Geral
 
-AuroraCare é uma plataforma full-stack pensada para casas de repouso. O projeto combina dashboard em tempo real, ingestão de planilhas de estoque, monitoramento de indicadores de saúde e disparo automatizado de comunicados para familiares e equipe médica.
+O portal A2 Data Monitoramento Ocupacional foi concebido para casas de repouso. O projeto combina dashboard em tempo real, ingestão de planilhas de estoque, monitoramento de indicadores de saúde e disparo automatizado de comunicados para familiares e equipe médica.
 
 **Principais áreas monitoradas:**
 
@@ -86,7 +86,7 @@ SMTP_SECURE=false
 SMTP_USER=seuemail@gmail.com
 SMTP_PASS=senha_de_app
 EMAIL_FROM=seuemail@gmail.com
-EMAIL_FROM_NAME=AuroraCare
+EMAIL_FROM_NAME=A2 Data Monitoramento Ocupacional
 
 # WhatsApp (Vonage)
 VONAGE_API_KEY=xxx

@@ -484,18 +484,51 @@ exports.listarTarefasOperacionais = async (req, res) => {
 
 exports.criarTarefaOperacional = async (req, res) => {
   try {
-    if (req.user?.role !== 'patrao') {
-      return res.status(403).json({ error: 'Somente a direção pode cadastrar novas tarefas.' });
+    const roleUsuario = req.user?.role;
+    if (!['patrao', 'supervisora'].includes(roleUsuario)) {
+      return res.status(403).json({ error: 'Você não possui permissão para cadastrar tarefas.' });
     }
 
-    const { titulo, descricao, roleDestino, dataLimite, documentoUrl } = req.body || {};
+    const {
+      titulo,
+      descricao,
+      roleDestino,
+      dataLimite,
+      documentoUrl,
+      recorrencia,
+      destinoTipo,
+      destinatarios
+    } = req.body || {};
 
     if (!titulo || !roleDestino) {
       return res.status(400).json({ error: 'Título e role destino são obrigatórios.' });
     }
 
-    if (!['asg', 'enfermaria'].includes(roleDestino)) {
+    if (!['asg', 'enfermaria', 'supervisora'].includes(roleDestino)) {
       return res.status(400).json({ error: 'Role destino inválida.' });
+    }
+
+    if (roleUsuario === 'supervisora' && roleDestino !== 'asg') {
+      return res.status(403).json({ error: 'Supervisão só pode direcionar tarefas para a equipe de ASG.' });
+    }
+
+    const recorrenciaNormalizada = ['diaria', 'semanal'].includes((recorrencia || '').toLowerCase())
+      ? recorrencia.toLowerCase()
+      : 'unica';
+    const destinoTipoNormalizado = (destinoTipo || 'individual').toLowerCase() === 'equipe'
+      ? 'equipe'
+      : 'individual';
+
+    let destinatariosIds = [];
+    if (Array.isArray(destinatarios)) {
+      destinatariosIds = destinatarios
+        .map((id) => Number.parseInt(id, 10))
+        .filter((valor) => Number.isInteger(valor) && valor > 0);
+    } else if (destinatarios) {
+      destinatariosIds = String(destinatarios)
+        .split(',')
+        .map((item) => Number.parseInt(item.trim(), 10))
+        .filter((valor) => Number.isInteger(valor) && valor > 0);
     }
 
     const tarefaId = await operacionalService.criarTarefa({
@@ -504,12 +537,15 @@ exports.criarTarefaOperacional = async (req, res) => {
       roleDestino,
       dataLimite: dataLimite || null,
       documentoUrl: documentoUrl || null,
-      criadoPor: req.user.id
+      criadoPor: req.user.id,
+      recorrencia: recorrenciaNormalizada,
+      destinoTipo: destinoTipoNormalizado,
+      destinatariosIds
     });
 
     const [tarefa] = await query(
-      `SELECT t.id, t.titulo, t.descricao, t.role_destino AS roleDestino, t.data_limite AS dataLimite,
-              t.documento_url AS documentoUrl, t.criado_em AS criadoEm, u.nome AS criadoPorNome
+      `SELECT t.id, t.titulo, t.descricao, t.role_destino AS roleDestino, t.recorrencia, t.destino_tipo AS destinoTipo,
+              t.data_limite AS dataLimite, t.documento_url AS documentoUrl, t.criado_em AS criadoEm, u.nome AS criadoPorNome
        FROM tarefas t
        LEFT JOIN usuarios u ON u.id = t.criado_por
        WHERE t.id = ?
@@ -517,17 +553,29 @@ exports.criarTarefaOperacional = async (req, res) => {
       [tarefaId]
     );
 
+    const destinatariosTarefa = await query(
+      `SELECT membro_id AS membroId, destino_nome_snapshot AS destinoNome, status, observacao, anexo_url AS anexoUrl,
+              concluido_em AS concluidoEm
+       FROM tarefas_execucoes
+       WHERE tarefa_id = ?`,
+      [tarefaId]
+    );
+
     res.status(201).json({
       tarefa: {
         ...tarefa,
         totalConcluidas: 0,
-        totalValidacoes: 0,
+        totalValidacoes: destinatariosTarefa.length,
+        destinatarios: destinatariosTarefa.map((item) => ({
+          ...item,
+          nome: item.destinoNome
+        })),
         validacoes: []
       }
     });
   } catch (error) {
     console.error('Erro ao criar tarefa operacional:', error);
-    res.status(500).json({ error: 'Não foi possível criar a tarefa.' });
+    res.status(500).json({ error: 'Não foi possível criar a tarefa. ' + error.message });
   }
 };
 
@@ -553,13 +601,18 @@ exports.validarTarefaOperacional = async (req, res) => {
       return res.status(400).json({ error: 'Informe o colaborador responsável pela validação.' });
     }
 
+    let membroRegistro = null;
     if (roleUsuario === 'patrao') {
-      const membroRegistro = await operacionalService.obterMembroPorId(membro);
+      membroRegistro = await operacionalService.obterMembroPorId(membro);
       if (!membroRegistro) {
         return res.status(404).json({ error: 'Colaborador não encontrado.' });
       }
-    } else if (!(await operacionalService.membroPertenceAoUsuario(membro, req.user.id))) {
-      return res.status(403).json({ error: 'Colaborador não pertence a este usuário.' });
+    } else {
+      const pertence = await operacionalService.membroPertenceAoUsuario(membro, req.user.id);
+      if (!pertence) {
+        return res.status(403).json({ error: 'Colaborador não pertence a este usuário.' });
+      }
+      membroRegistro = await operacionalService.obterMembroPorId(membro);
     }
 
     const validacao = await operacionalService.registrarValidacaoTarefa({
@@ -567,7 +620,8 @@ exports.validarTarefaOperacional = async (req, res) => {
       membroId: membro,
       status: statusNormalizado,
       observacao,
-      anexoUrl
+      anexoUrl,
+      membroNome: membroRegistro?.nome
     });
 
     res.json({ validacao });
@@ -608,7 +662,11 @@ exports.registrarPontoColaborador = async (req, res) => {
     res.status(201).json({ success: true });
   } catch (error) {
     console.error('Erro ao registrar ponto do colaborador:', error);
-    res.status(500).json({ error: 'Não foi possível registrar o ponto.' });
+    const mensagem = error?.message?.includes('Colaborador não encontrado')
+      ? error.message
+      : 'Não foi possível registrar o ponto.';
+    const status = error?.message?.includes('Colaborador não encontrado') ? 404 : 500;
+    res.status(status).json({ error: mensagem });
   }
 };
 
@@ -641,5 +699,43 @@ exports.listarPontosColaboradores = async (req, res) => {
   } catch (error) {
     console.error('Erro ao listar pontos dos colaboradores:', error);
     res.status(500).json({ error: 'Não foi possível carregar o histórico de pontos.' });
+  }
+};
+
+exports.importarPontosColaboradores = async (req, res) => {
+  try {
+    const roleUsuario = req.user?.role;
+    if (!['patrao', 'supervisora'].includes(roleUsuario)) {
+      return res.status(403).json({ error: 'Somente a direção ou supervisão podem importar pontos.' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nenhum arquivo foi enviado para importação.' });
+    }
+
+    const processamento = await etlService.processarPlanilhaPontos(req.file.path);
+
+    if (!processamento.registros.length) {
+      return res.status(400).json({
+        error: 'Nenhuma linha válida foi encontrada na planilha de pontos.',
+        detalhes: processamento.erros
+      });
+    }
+
+    const resultado = await operacionalService.registrarPontosEmLote({
+      registros: processamento.registros,
+      usuarioId: req.user.id
+    });
+
+    res.json({
+      sucesso: true,
+      totalPlanilha: processamento.registros.length,
+      importados: resultado.inseridos,
+      inconsistenciasPlanilha: processamento.erros,
+      inconsistenciasBanco: resultado.erros
+    });
+  } catch (error) {
+    console.error('Erro ao importar planilha de pontos:', error);
+    res.status(500).json({ error: 'Não foi possível importar os pontos. ' + error.message });
   }
 };

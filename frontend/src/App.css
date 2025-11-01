@@ -8,9 +8,9 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: linear-gradient(135deg, #f0f7f4 0%, #d9e7ff 100%);
+  background: linear-gradient(135deg, #f4f6fb 0%, #e1e8f6 100%);
   min-height: 100vh;
-  color: #1f2d3d;
+  color: #111827;
 }
 
 .App {
@@ -20,7 +20,7 @@ body {
 }
 
 .App-header {
-  background: linear-gradient(135deg, #5ca4a9 0%, #4257b2 100%);
+  background: linear-gradient(135deg, #0f172a 0%, #2563eb 100%);
   color: white;
   padding: clamp(20px, 4vw, 40px);
   box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
@@ -118,9 +118,9 @@ body {
 }
 
 .secondary-button {
-  border: 1px solid rgba(66, 87, 178, 0.35);
+  border: 1px solid rgba(37, 99, 235, 0.4);
   background: rgba(255, 255, 255, 0.92);
-  color: #4257b2;
+  color: #1d4ed8;
   font-size: 13px;
   font-weight: 600;
   padding: 9px 16px;
@@ -130,8 +130,8 @@ body {
 }
 
 .secondary-button:hover {
-  border-color: rgba(66, 87, 178, 0.55);
-  box-shadow: 0 8px 18px rgba(66, 87, 178, 0.18);
+  border-color: rgba(37, 99, 235, 0.65);
+  box-shadow: 0 8px 18px rgba(29, 78, 216, 0.18);
 }
 
 .secondary-button:disabled {
@@ -142,7 +142,7 @@ body {
 
 .user-card__actions .secondary-button {
   background: rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   color: white;
   box-shadow: none;
 }

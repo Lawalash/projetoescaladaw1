@@ -25,8 +25,8 @@ function LoginForm({ onSubmit }) {
   return (
     <div className="login-card">
       <div className="login-card__header">
-        <h1>Bem-vindo(a) ao AuroraCare</h1>
-        <p>Faça login para acessar o portal operacional do lar.</p>
+        <h1>Bem-vindo(a) ao A2 Data Monitoramento Ocupacional</h1>
+        <p>Utilize seu acesso corporativo para acompanhar rotinas e indicadores do lar.</p>
       </div>
 
       <form className="login-card__form" onSubmit={handleSubmit}>
@@ -34,7 +34,7 @@ function LoginForm({ onSubmit }) {
         <input
           id="email"
           type="email"
-          placeholder="ex: direcao@auroracare.com"
+          placeholder="ex: direcao@a2data.com.br"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           autoComplete="username"
@@ -62,9 +62,10 @@ function LoginForm({ onSubmit }) {
       <div className="login-card__tips">
         <h2>Perfis disponíveis</h2>
         <ul>
-          <li>Direção — direcao@auroracare.com / patroes123</li>
-          <li>Serviços gerais — asg@auroracare.com / limpeza123</li>
-          <li>Enfermagem — enfermaria@auroracare.com / enfermaria123</li>
+          <li>Direção — direcao@a2data.com.br / patroes123</li>
+          <li>Supervisora — supervisao@a2data.com.br / supervisao123</li>
+          <li>Serviços gerais — asg@a2data.com.br / limpeza123</li>
+          <li>Enfermagem — enfermagem@a2data.com.br / enfermagem123</li>
         </ul>
       </div>
     </div>
