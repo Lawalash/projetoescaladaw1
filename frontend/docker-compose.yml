@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+  # Banco de Dados MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: qw1-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-senha123}
+      MYSQL_DATABASE: ${DB_NAME:-qw1_relatorios}
+      MYSQL_USER: ${DB_USER:-qw1user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-senha123}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    networks:
+      - qw1-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Node.js
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: qw1-backend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=8000
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=${DB_USER:-qw1user}
+      - DB_PASSWORD=${DB_PASSWORD:-senha123}
+      - DB_NAME=${DB_NAME:-qw1_relatorios}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - VONAGE_API_KEY=${VONAGE_API_KEY}
+      - VONAGE_API_SECRET=${VONAGE_API_SECRET}
+      - WHATSAPP_FROM=${WHATSAPP_FROM}
+      - CORS_ORIGIN=http://localhost:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./etl:/app/etl
+    networks:
+      - qw1-network
+    command: npm start
+
+  # Cron Job Service
+  cron:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: qw1-cron
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=${DB_USER:-qw1user}
+      - DB_PASSWORD=${DB_PASSWORD:-senha123}
+      - DB_NAME=${DB_NAME:-qw1_relatorios}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - VONAGE_API_KEY=${VONAGE_API_KEY}
+      - VONAGE_API_SECRET=${VONAGE_API_SECRET}
+      - WHATSAPP_FROM=${WHATSAPP_FROM}
+      - ENABLE_CRON=true
+      - CRON_EXPRESSION=${CRON_EXPRESSION:-0 * * * *}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - qw1-network
+    command: npm run cron
+
+  # Frontend React
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: qw1-frontend
+    restart: unless-stopped
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000/api
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - qw1-network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  qw1-network:
+    driver: bridge
