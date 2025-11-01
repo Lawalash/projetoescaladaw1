@@ -1,7 +1,7 @@
 {
   "name": "qw1-frontend",
   "version": "1.0.0",
-  "description": "Dashboard React para QW1 - Automação de Relatórios",
+  "description": "Dashboard React para AuroraCare - Monitoramento do lar",
   "private": true,
   "type": "module",
   "scripts": {

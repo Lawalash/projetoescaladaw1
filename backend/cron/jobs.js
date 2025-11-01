@@ -4,7 +4,7 @@ const cron = require('node-cron');
 const { query } = require('../src/db/connection');
 const notificationService = require('../src/services/notificationService');
 
-console.log('🕐 Iniciando serviço de agendamento QW1...');
+console.log('🕐 Iniciando serviço de agendamento AuroraCare...');
 
 // Verificar se cron está habilitado
 if (process.env.ENABLE_CRON !== 'true') {
@@ -17,34 +17,80 @@ if (process.env.ENABLE_CRON !== 'true') {
  */
 async function gerarDadosRelatorio(dias = 7) {
   try {
-    // KPIs
-    const [kpis] = await query(`
-      SELECT 
-        COUNT(*) as total_vendas,
-        SUM(total) as receita_total,
-        AVG(total) as ticket_medio,
-        SUM(quantidade) as itens_vendidos
-      FROM vendas
-      WHERE data_venda >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-    `, [dias]);
-    
-    // Top produtos
-    const topProdutos = await query(`
-      SELECT 
-        produto,
-        SUM(total) as receita,
-        SUM(quantidade) as quantidade
-      FROM vendas
-      WHERE data_venda >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-      GROUP BY produto
-      ORDER BY receita DESC
-      LIMIT 5
-    `, [dias]);
-    
+    const [resumo] = await query(
+      `
+        SELECT
+          (SELECT COUNT(*) FROM residentes WHERE status IN ('ativo','observacao')) AS residentesAtivos,
+          (SELECT COUNT(*) FROM leitos WHERE ocupado = 1) AS leitosOcupados,
+          (SELECT COUNT(*) FROM leitos) AS totalLeitos,
+          (SELECT AVG(taxa_aderencia) FROM metricas_medicacao WHERE data_ref >= DATE_SUB(CURDATE(), INTERVAL ? DAY)) AS taxaMedicacao,
+          (SELECT SUM(obitos) FROM metricas_saude WHERE data_ref >= DATE_SUB(CURDATE(), INTERVAL ? DAY)) AS obitosPeriodo,
+          (SELECT SUM(internacoes) FROM metricas_saude WHERE data_ref >= DATE_SUB(CURDATE(), INTERVAL ? DAY)) AS internacoesPeriodo
+      `,
+      [dias, dias, dias]
+    );
+
+    const ocupacaoSemanal = await query(
+      `
+        SELECT DATE_FORMAT(data_ref, '%Y-%u') AS semana, ROUND(AVG(taxa_ocupacao), 1) AS taxa_ocupacao
+        FROM metricas_saude
+        WHERE data_ref >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+        GROUP BY semana
+        ORDER BY semana DESC
+        LIMIT 4
+      `,
+      [dias]
+    );
+
+    const adesaoAla = await query(
+      `
+        SELECT ala, ROUND(AVG(taxa_aderencia), 1) AS taxa
+        FROM metricas_medicacao
+        WHERE data_ref >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+        GROUP BY ala
+        ORDER BY taxa ASC
+        LIMIT 3
+      `,
+      [dias]
+    );
+
+    const coberturaAlimentos = await query(
+      `
+        SELECT categoria, ROUND(SUM(quantidade_atual) / NULLIF(SUM(consumo_diario),0), 1) AS dias
+        FROM estoque_alimentos
+        GROUP BY categoria
+        ORDER BY dias ASC
+        LIMIT 3
+      `
+    );
+
+    const coberturaLimpeza = await query(
+      `
+        SELECT categoria, ROUND(SUM(quantidade_atual) / NULLIF(SUM(consumo_diario),0), 1) AS dias
+        FROM estoque_limpeza
+        GROUP BY categoria
+        ORDER BY dias ASC
+        LIMIT 3
+      `
+    );
+
+    const taxaOcupacao = resumo.totalLeitos > 0
+      ? Number(((resumo.leitosOcupados || 0) / resumo.totalLeitos) * 100).toFixed(1)
+      : '0.0';
+
     return {
       periodo: `Últimos ${dias} dias`,
-      kpis,
-      topProdutos,
+      residentesAtivos: resumo.residentesAtivos || 0,
+      taxaOcupacao,
+      taxaMedicacao: Number(resumo.taxaMedicacao || 0).toFixed(1),
+      obitosPeriodo: resumo.obitosPeriodo || 0,
+      internacoesPeriodo: resumo.internacoesPeriodo || 0,
+      ocupacaoSemanal: ocupacaoSemanal.reverse(),
+      adesaoAla,
+      estoqueCritico: {
+        alimentos: coberturaAlimentos,
+        limpeza: coberturaLimpeza
+      },
       geradoEm: new Date().toISOString()
     };
   } catch (error) {
@@ -57,7 +103,7 @@ async function gerarDadosRelatorio(dias = 7) {
  * Job principal: enviar relatórios
  */
 async function jobEnviarRelatorios() {
-  console.log(`\n📊 [${new Date().toLocaleString()}] Executando job de envio de relatórios...`);
+  console.log(`\n📊 [${new Date().toLocaleString()}] Enviando resumo automatizado do lar...`);
   
   try {
     // Gerar dados

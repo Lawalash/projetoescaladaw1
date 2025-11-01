@@ -10,22 +10,24 @@ function App() {
     <div className="App">
       <header className="App-header">
         <div className="header-content">
-          <h1>📊 QW1 - Automação de Relatórios</h1>
-          <p className="subtitle">Sistema de análise de vendas e relatórios automáticos</p>
+          <h1>🏡 AuroraCare - Gestão do Lar de Idosos</h1>
+          <p className="subtitle">Acompanhe saúde, bem-estar e estoques críticos em um só lugar.</p>
         </div>
-        
+
         <nav className="tabs">
           <button
+            type="button"
             className={abaAtiva === 'dashboard' ? 'tab active' : 'tab'}
             onClick={() => setAbaAtiva('dashboard')}
           >
-            📈 Dashboard
+            📊 Painel Integrado
           </button>
           <button
+            type="button"
             className={abaAtiva === 'config' ? 'tab active' : 'tab'}
             onClick={() => setAbaAtiva('config')}
           >
-            ⚙️ Configurações
+            📣 Comunicações
           </button>
         </nav>
       </header>
@@ -36,7 +38,7 @@ function App() {
       </main>
 
       <footer className="App-footer">
-        <p>QW1 © 2025 - Desenvolvido em Campina Grande, PB</p>
+        <p>AuroraCare © {new Date().getFullYear()} — cuidado humanizado apoiado por dados.</p>
       </footer>
     </div>
   );
