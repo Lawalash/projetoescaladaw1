@@ -125,7 +125,7 @@ function Dashboard({
   const mostrarEstoque = isPatrao || isASG;
   const mostrarPlanilhas = isPatrao || isASG;
   const membroAtivoId = membroAtivo?.id || null;
-  const membroFiltro = isPatrao ? filtroMembroId : membroAtivoId;
+  const membroFiltro = isPatrao || isSupervisora ? filtroMembroId : membroAtivoId;
   const colaboradorAtualNome = membroAtivo?.nome;
   const colaboradoresDisponiveis = useMemo(() => {
     if (!podeCriarTarefas) return [];
@@ -346,7 +346,7 @@ function Dashboard({
   }, [carregarPontos]);
 
   const handleValidarTarefa = useCallback(async (tarefaId, status) => {
-    const membroDestino = isPatrao ? filtroMembroId : membroAtivoId;
+    const membroDestino = isPatrao || isSupervisora ? filtroMembroId : membroAtivoId;
     setTarefasErro(null);
     if (!membroDestino) {
       setTarefasErro('Selecione um colaborador para validar as atividades.');
@@ -434,7 +434,7 @@ function Dashboard({
 
   const handleRegistrarPonto = async (event) => {
     event.preventDefault();
-    const membroDestino = isPatrao ? filtroMembroId : membroAtivoId;
+    const membroDestino = isPatrao || isSupervisora ? filtroMembroId : membroAtivoId;
     if (!membroDestino) {
       setPontosErro('Selecione um colaborador para registrar o ponto.');
       if (onSolicitarTrocaMembro) {

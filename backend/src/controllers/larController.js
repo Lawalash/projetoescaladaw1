@@ -503,8 +503,23 @@ exports.obterEquipeOperacional = async (req, res) => {
     const { role: roleFiltro } = req.query || {};
 
     let membros;
-    if (roleUsuario === 'patrao' && roleFiltro) {
-      membros = await operacionalService.obterEquipePorRole(roleFiltro);
+    if (roleUsuario === 'patrao') {
+      const filtroDirecao = roleFiltro && roleFiltro !== 'todas' ? roleFiltro : null;
+      if (filtroDirecao) {
+        membros = await operacionalService.obterEquipePorRole(filtroDirecao);
+      } else {
+        const [asg, enfermaria, supervisao] = await Promise.all([
+          operacionalService.obterEquipePorRole('asg'),
+          operacionalService.obterEquipePorRole('enfermaria'),
+          operacionalService.obterEquipePorRole('supervisora')
+        ]);
+        membros = [...asg, ...enfermaria, ...supervisao];
+      }
+    } else if (roleUsuario === 'supervisora') {
+      const filtroPermitido = roleFiltro && ['asg', 'supervisora'].includes(roleFiltro)
+        ? roleFiltro
+        : undefined;
+      membros = await operacionalService.obterEquipePorUsuario(req.user.id, roleUsuario, filtroPermitido);
     } else {
       membros = await operacionalService.obterEquipePorUsuario(req.user.id, roleUsuario);
     }
@@ -521,9 +536,16 @@ exports.listarTarefasOperacionais = async (req, res) => {
     const roleUsuario = req.user?.role;
     const { role: roleFiltro, membroId } = req.query || {};
 
-    const roleConsulta = roleUsuario === 'patrao'
-      ? (roleFiltro && roleFiltro !== 'todas' ? roleFiltro : undefined)
-      : roleUsuario;
+    let roleConsulta;
+    if (roleUsuario === 'patrao') {
+      roleConsulta = roleFiltro && roleFiltro !== 'todas' ? roleFiltro : undefined;
+    } else if (roleUsuario === 'supervisora') {
+      roleConsulta = roleFiltro && ['asg', 'supervisora'].includes(roleFiltro)
+        ? roleFiltro
+        : 'asg';
+    } else {
+      roleConsulta = roleUsuario;
+    }
 
     const membro = membroId ? Number.parseInt(membroId, 10) : null;
     if (roleUsuario !== 'patrao' && membro && !(await operacionalService.membroPertenceAoUsuario(membro, req.user.id))) {
@@ -748,10 +770,19 @@ exports.listarPontosColaboradores = async (req, res) => {
       }
     }
 
+    let roleConsulta;
+    if (roleUsuario === 'patrao') {
+      roleConsulta = roleFiltro && roleFiltro !== 'todas' ? roleFiltro : undefined;
+    } else if (roleUsuario === 'supervisora') {
+      roleConsulta = roleFiltro && ['asg', 'supervisora'].includes(roleFiltro)
+        ? roleFiltro
+        : 'asg';
+    } else {
+      roleConsulta = roleUsuario;
+    }
+
     const registros = await operacionalService.listarPontos({
-      role: roleUsuario === 'patrao'
-        ? (roleFiltro && roleFiltro !== 'todas' ? roleFiltro : undefined)
-        : roleUsuario,
+      role: roleConsulta,
       membroId: membro || undefined,
       limite
     });

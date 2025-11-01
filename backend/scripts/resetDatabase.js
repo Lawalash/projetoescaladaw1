@@ -49,6 +49,56 @@ function diasAtras(base, dias) {
   return data;
 }
 
+async function colunaExiste(connection, tabela, coluna) {
+  const [rows] = await connection.execute(
+    `SELECT 1
+       FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND COLUMN_NAME = ?
+      LIMIT 1`,
+    [tabela, coluna]
+  );
+
+  return rows.length > 0;
+}
+
+async function prepararColunasDestino(connection) {
+  const possuiDestinoId = await colunaExiste(connection, 'tarefas', 'destino_id');
+  const possuiDestinoMembroId = await colunaExiste(connection, 'tarefas', 'destino_membro_id');
+
+  if (possuiDestinoId && !possuiDestinoMembroId) {
+    await connection
+      .execute('ALTER TABLE tarefas CHANGE destino_id destino_membro_id INT NULL')
+      .catch(() => {});
+  }
+
+  if (!(await colunaExiste(connection, 'tarefas', 'destino_membro_id'))) {
+    await connection
+      .execute('ALTER TABLE tarefas ADD COLUMN destino_membro_id INT NULL AFTER destino_tipo')
+      .catch(() => {});
+  }
+
+  const possuiDestinoNomeLegado = await colunaExiste(connection, 'tarefas', 'destino_nome');
+  const possuiDestinoNomeSnapshot = await colunaExiste(connection, 'tarefas', 'destino_nome_snapshot');
+
+  if (possuiDestinoNomeLegado && !possuiDestinoNomeSnapshot) {
+    await connection
+      .execute(
+        'ALTER TABLE tarefas CHANGE destino_nome destino_nome_snapshot VARCHAR(180) NULL'
+      )
+      .catch(() => {});
+  }
+
+  if (!possuiDestinoNomeSnapshot) {
+    await connection
+      .execute(
+        'ALTER TABLE tarefas ADD COLUMN destino_nome_snapshot VARCHAR(180) NULL AFTER destino_membro_id'
+      )
+      .catch(() => {});
+  }
+}
+
 async function criarEstrutura(connection) {
   const ddlStatements = [
     `CREATE TABLE IF NOT EXISTS usuarios (
@@ -200,6 +250,8 @@ async function criarEstrutura(connection) {
       role_destino ENUM('asg','enfermaria','supervisora') NOT NULL,
       recorrencia ENUM('unica','diaria','semanal') DEFAULT 'unica',
       destino_tipo ENUM('individual','equipe') DEFAULT 'individual',
+      destino_membro_id INT NULL,
+      destino_nome_snapshot VARCHAR(180) NULL,
       criado_por INT,
       data_limite DATE,
       documento_url VARCHAR(255),
@@ -255,6 +307,8 @@ async function criarEstrutura(connection) {
   for (const statement of ddlStatements) {
     await connection.execute(statement);
   }
+
+  await prepararColunasDestino(connection);
 }
 
 async function popularDados(connection) {
