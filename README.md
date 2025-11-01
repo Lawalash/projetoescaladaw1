@@ -90,6 +90,9 @@ INSERT INTO usuarios (nome, email, senha_hash, role) VALUES
 > Observação: a tabela `usuarios` é criada automaticamente pelo script `npm run db:reset`. Execute a query apenas caso esteja
 > migrando dados para um banco existente.
 
+> Dica: se precisar cadastrar usuários manualmente direto no MySQL, você também pode gerar o hash com `SHA2('sua_senha', 256)`.
+> A API valida tanto os hashes neste formato quanto os valores `salt:hash` gerados pela utilidade de segurança (`hashPassword`).
+
 ## 📋 Funcionalidades implementadas
 
 - **Login com separação de perfis** (direção, serviços gerais e enfermagem) e redirecionamento para a interface adequada.

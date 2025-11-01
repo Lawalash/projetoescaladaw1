@@ -16,19 +16,42 @@ function verifyPassword(password, storedHash) {
     return false;
   }
 
-  const [salt, hash] = storedHash.split(':');
-  if (!salt || !hash) {
-    return false;
+  const candidate = storedHash.trim();
+
+  // Formato "salt:hash" gerado por scrypt
+  if (candidate.includes(':')) {
+    const [salt, hash] = candidate.split(':');
+    if (!salt || !hash) {
+      return false;
+    }
+
+    try {
+      const derivedKey = crypto.scryptSync(password, salt, 64);
+      const storedKey = Buffer.from(hash, 'hex');
+
+      if (derivedKey.length !== storedKey.length) {
+        return false;
+      }
+
+      return crypto.timingSafeEqual(derivedKey, storedKey);
+    } catch (error) {
+      return false;
+    }
   }
 
-  const derivedKey = crypto.scryptSync(password, salt, 64);
-  const storedKey = Buffer.from(hash, 'hex');
+  // Fallback para hashes SHA-256 (ex.: gerados via `SHA2('senha', 256)` no MySQL)
+  try {
+    const derivedKey = crypto.createHash('sha256').update(password, 'utf8').digest();
+    const storedKey = Buffer.from(candidate, 'hex');
 
-  if (derivedKey.length !== storedKey.length) {
+    if (derivedKey.length !== storedKey.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(derivedKey, storedKey);
+  } catch (error) {
     return false;
   }
-
-  return crypto.timingSafeEqual(derivedKey, storedKey);
 }
 
 function encodeBase64Url(input) {
