@@ -85,7 +85,8 @@ exports.obterPainelCompleto = async (req, res) => {
       estoqueAlimentos,
       estoqueLimpeza,
       alertasEstoque,
-      planilhasEstoque
+      planilhasEstoque,
+      estoqueItens
     ] = await Promise.all([
       query(
         `
@@ -201,6 +202,24 @@ exports.obterPainelCompleto = async (req, res) => {
           ORDER BY criado_em DESC
           LIMIT 10
         `
+      ),
+      query(
+        `
+          SELECT
+            tipo_estoque,
+            categoria,
+            nome_item,
+            unidade,
+            quantidade_atual,
+            consumo_diario,
+            validade,
+            lote,
+            fornecedor,
+            observacoes,
+            atualizado_em
+          FROM estoque_itens
+          ORDER BY tipo_estoque ASC, categoria ASC, nome_item ASC
+        `
       )
     ]);
 
@@ -238,6 +257,47 @@ exports.obterPainelCompleto = async (req, res) => {
       })
     };
 
+    const estoqueDetalhado = estoqueItens.reduce(
+      (acc, item) => {
+        const tipo = item.tipo_estoque || 'outros';
+        const quantidadeAtual = normalizarFloat(item.quantidade_atual);
+        const consumoDiario = normalizarFloat(item.consumo_diario);
+
+        const registro = {
+          categoria: item.categoria || 'Sem categoria',
+          nome: item.nome_item,
+          unidade: item.unidade,
+          quantidadeAtual,
+          consumoDiario,
+          coberturaDias:
+            consumoDiario > 0 && Number.isFinite(consumoDiario)
+              ? Number((quantidadeAtual / consumoDiario).toFixed(1))
+              : null,
+          validade: item.validade,
+          lote: item.lote,
+          fornecedor: item.fornecedor,
+          observacoes: item.observacoes,
+          atualizadoEm: item.atualizado_em
+        };
+
+        if (!acc[tipo]) {
+          acc[tipo] = [];
+        }
+
+        acc[tipo].push(registro);
+        return acc;
+      },
+      { alimentos: [], limpeza: [] }
+    );
+
+    if (!estoqueDetalhado.alimentos) {
+      estoqueDetalhado.alimentos = [];
+    }
+
+    if (!estoqueDetalhado.limpeza) {
+      estoqueDetalhado.limpeza = [];
+    }
+
     res.json({
       periodo: { inicio, fim },
       resumo: {
@@ -265,6 +325,7 @@ exports.obterPainelCompleto = async (req, res) => {
       obitosMensal
       },
       inventario,
+      inventarioDetalhado: estoqueDetalhado,
       alertas: alertasEstoque.map((alerta) => ({
         ...alerta,
         criado_em: alerta.criado_em
