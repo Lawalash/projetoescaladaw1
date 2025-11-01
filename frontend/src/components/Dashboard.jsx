@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { format, parseISO, subDays } from 'date-fns';
 import {
   Area,
@@ -16,14 +16,55 @@ import {
 } from 'recharts';
 import {
   obterPainelCompleto,
-  uploadPlanilhaEstoque
+  uploadPlanilhaEstoque,
+  listarTarefasOperacionais,
+  validarTarefaOperacional,
+  registrarPontoColaborador,
+  listarPontosColaboradores,
+  criarTarefaOperacional,
+  obterEquipeOperacional
 } from '../services/api';
 import './styles/Dashboard.css';
 
 const formatarNumero = (valor) => new Intl.NumberFormat('pt-BR').format(Number(valor || 0));
 const formatarPercentual = (valor) => `${Number(valor || 0).toFixed(1)}%`;
+const ROLE_NOMES = {
+  asg: 'Serviços Gerais',
+  enfermaria: 'Enfermagem'
+};
+const STATUS_LABELS = {
+  concluida: 'Concluída',
+  pendente: 'Pendente',
+  nao_realizada: 'Não realizada'
+};
+const formatarDataSimples = (valor) => {
+  if (!valor) return '';
+  try {
+    return format(parseISO(valor), 'dd/MM/yyyy');
+  } catch (error) {
+    try {
+      return format(new Date(valor), 'dd/MM/yyyy');
+    } catch (err) {
+      return valor;
+    }
+  }
+};
+const formatarDataHora = (valor) => {
+  if (!valor) return '--';
+  try {
+    return format(new Date(valor), 'dd/MM/yyyy HH:mm');
+  } catch (error) {
+    return '--';
+  }
+};
 
-function Dashboard({ role = 'patrao' }) {
+function Dashboard({
+  role = 'patrao',
+  membroAtivo = null,
+  membrosEquipe = [],
+  onSolicitarTrocaMembro,
+  onAtualizarEquipe
+}) {
   const [inicio, setInicio] = useState(format(subDays(new Date(), 29), 'yyyy-MM-dd'));
   const [fim, setFim] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [painel, setPainel] = useState(null);
@@ -32,6 +73,28 @@ function Dashboard({ role = 'patrao' }) {
   const [uploadStatus, setUploadStatus] = useState(null);
   const [uploadTipo, setUploadTipo] = useState('alimentos');
   const [uploadResponsavel, setUploadResponsavel] = useState('');
+  const [tarefas, setTarefas] = useState([]);
+  const [tarefasCarregando, setTarefasCarregando] = useState(false);
+  const [tarefasErro, setTarefasErro] = useState(null);
+  const [pontos, setPontos] = useState([]);
+  const [pontosCarregando, setPontosCarregando] = useState(false);
+  const [pontosErro, setPontosErro] = useState(null);
+  const [filtroRoleTarefa, setFiltroRoleTarefa] = useState(role === 'patrao' ? 'asg' : role);
+  const [filtroMembroId, setFiltroMembroId] = useState(null);
+  const [novaTarefa, setNovaTarefa] = useState({
+    titulo: '',
+    descricao: '',
+    roleDestino: 'asg',
+    dataLimite: '',
+    documentoUrl: ''
+  });
+  const [criandoTarefa, setCriandoTarefa] = useState(false);
+  const [equipesDirecao, setEquipesDirecao] = useState([]);
+  const [equipesCarregando, setEquipesCarregando] = useState(false);
+  const [equipesErro, setEquipesErro] = useState(null);
+  const [registrandoPonto, setRegistrandoPonto] = useState(false);
+  const [observacaoPonto, setObservacaoPonto] = useState('');
+  const [tipoPonto, setTipoPonto] = useState('entrada');
 
   const isPatrao = role === 'patrao';
   const isASG = role === 'asg';
@@ -42,10 +105,69 @@ function Dashboard({ role = 'patrao' }) {
   const mostrarMedicacao = isPatrao || isEnfermaria;
   const mostrarEstoque = isPatrao || isASG;
   const mostrarPlanilhas = isPatrao || isASG;
+  const membroAtivoId = membroAtivo?.id || null;
+  const membroFiltro = isPatrao ? filtroMembroId : membroAtivoId;
+  const colaboradorAtualNome = membroAtivo?.nome;
 
   useEffect(() => {
     carregarPainel();
   }, [inicio, fim]);
+
+  useEffect(() => {
+    if (!isPatrao) {
+      setFiltroRoleTarefa(role);
+    }
+  }, [isPatrao, role]);
+
+  useEffect(() => {
+    if (!isPatrao) {
+      setFiltroMembroId(membroAtivoId || null);
+    }
+  }, [isPatrao, membroAtivoId]);
+
+  useEffect(() => {
+    if (isPatrao && filtroRoleTarefa && filtroRoleTarefa !== 'todas') {
+      setNovaTarefa((prev) => ({ ...prev, roleDestino: filtroRoleTarefa }));
+    } else if (isPatrao && filtroRoleTarefa === 'todas') {
+      setFiltroMembroId(null);
+    }
+  }, [filtroRoleTarefa, isPatrao]);
+
+  useEffect(() => {
+    if (!isPatrao) return;
+
+    let ativo = true;
+    setEquipesCarregando(true);
+    setEquipesErro(null);
+
+    const roleConsulta = filtroRoleTarefa && filtroRoleTarefa !== 'todas' ? filtroRoleTarefa : undefined;
+
+    obterEquipeOperacional({ role: roleConsulta })
+      .then((resposta) => {
+        if (!ativo) return;
+        const lista = resposta?.membros || [];
+        setEquipesDirecao(lista);
+        setFiltroMembroId((atual) => {
+          if (!atual) return null;
+          return lista.some((item) => Number(item.id) === Number(atual)) ? atual : null;
+        });
+      })
+      .catch((error) => {
+        if (!ativo) return;
+        console.error('Erro ao carregar equipe para direção:', error);
+        setEquipesErro('Não foi possível carregar os colaboradores dessa equipe.');
+        setEquipesDirecao([]);
+        setFiltroMembroId(null);
+      })
+      .finally(() => {
+        if (!ativo) return;
+        setEquipesCarregando(false);
+      });
+
+    return () => {
+      ativo = false;
+    };
+  }, [isPatrao, filtroRoleTarefa]);
 
   const carregarPainel = async () => {
     setCarregando(true);
@@ -61,6 +183,200 @@ function Dashboard({ role = 'patrao' }) {
       setCarregando(false);
     }
   };
+
+  const carregarTarefas = useCallback(async () => {
+    setTarefasCarregando(true);
+    setTarefasErro(null);
+
+    try {
+      const params = {};
+      const roleConsulta = isPatrao
+        ? filtroRoleTarefa && filtroRoleTarefa !== 'todas'
+          ? filtroRoleTarefa
+          : undefined
+        : role;
+      if (roleConsulta) {
+        params.role = roleConsulta;
+      }
+      if (membroFiltro) {
+        params.membroId = membroFiltro;
+      }
+
+      const resposta = await listarTarefasOperacionais(params);
+      setTarefas(resposta?.tarefas || []);
+    } catch (error) {
+      console.error('Erro ao carregar tarefas operacionais:', error);
+      setTarefasErro('Não foi possível carregar as tarefas operacionais.');
+    } finally {
+      setTarefasCarregando(false);
+    }
+  }, [filtroRoleTarefa, isPatrao, membroFiltro, role]);
+
+  const carregarPontos = useCallback(async () => {
+    setPontosCarregando(true);
+    setPontosErro(null);
+
+    try {
+      const params = {};
+      const roleConsulta = isPatrao
+        ? filtroRoleTarefa && filtroRoleTarefa !== 'todas'
+          ? filtroRoleTarefa
+          : undefined
+        : role;
+      if (roleConsulta) {
+        params.role = roleConsulta;
+      }
+      if (membroFiltro) {
+        params.membroId = membroFiltro;
+      }
+      params.limite = isPatrao ? 50 : 20;
+
+      const resposta = await listarPontosColaboradores(params);
+      setPontos(resposta?.registros || []);
+    } catch (error) {
+      console.error('Erro ao carregar pontos dos colaboradores:', error);
+      setPontosErro('Não foi possível carregar os registros de ponto.');
+    } finally {
+      setPontosCarregando(false);
+    }
+  }, [filtroRoleTarefa, isPatrao, membroFiltro, role]);
+
+  useEffect(() => {
+    carregarTarefas();
+  }, [carregarTarefas]);
+
+  useEffect(() => {
+    carregarPontos();
+  }, [carregarPontos]);
+
+  const handleValidarTarefa = useCallback(async (tarefaId, status) => {
+    const membroDestino = isPatrao ? filtroMembroId : membroAtivoId;
+    setTarefasErro(null);
+    if (!membroDestino) {
+      setTarefasErro('Selecione um colaborador para validar as atividades.');
+      if (onSolicitarTrocaMembro) {
+        onSolicitarTrocaMembro();
+      }
+      return;
+    }
+
+    try {
+      const precisaObservacao = status !== 'pendente';
+      const observacao = precisaObservacao
+        ? window.prompt('Deseja adicionar uma observação? (opcional)', '') || ''
+        : '';
+
+      await validarTarefaOperacional({
+        tarefaId,
+        membroId: membroDestino,
+        status,
+        observacao: observacao || undefined
+      });
+      await carregarTarefas();
+    } catch (error) {
+      console.error('Erro ao validar tarefa:', error);
+      setTarefasErro('Não foi possível registrar a validação da tarefa.');
+    }
+  }, [carregarTarefas, filtroMembroId, isPatrao, membroAtivoId, onSolicitarTrocaMembro]);
+
+  const handleCriarTarefa = async (event) => {
+    event.preventDefault();
+    if (!novaTarefa.titulo.trim()) {
+      setTarefasErro('Informe um título para a tarefa.');
+      return;
+    }
+
+    setCriandoTarefa(true);
+    setTarefasErro(null);
+
+    try {
+      await criarTarefaOperacional({
+        titulo: novaTarefa.titulo.trim(),
+        descricao: novaTarefa.descricao.trim(),
+        roleDestino: novaTarefa.roleDestino,
+        dataLimite: novaTarefa.dataLimite || undefined,
+        documentoUrl: novaTarefa.documentoUrl || undefined
+      });
+
+      setNovaTarefa((anterior) => ({
+        ...anterior,
+        titulo: '',
+        descricao: '',
+        dataLimite: '',
+        documentoUrl: ''
+      }));
+
+      if (isPatrao && filtroRoleTarefa !== novaTarefa.roleDestino) {
+        setFiltroRoleTarefa(novaTarefa.roleDestino);
+      }
+
+      await carregarTarefas();
+    } catch (error) {
+      console.error('Erro ao criar tarefa operacional:', error);
+      setTarefasErro('Não foi possível criar a tarefa. Verifique os campos preenchidos.');
+    } finally {
+      setCriandoTarefa(false);
+    }
+  };
+
+  const handleRegistrarPonto = async (event) => {
+    event.preventDefault();
+    const membroDestino = isPatrao ? filtroMembroId : membroAtivoId;
+    if (!membroDestino) {
+      setPontosErro('Selecione um colaborador para registrar o ponto.');
+      if (onSolicitarTrocaMembro) {
+        onSolicitarTrocaMembro();
+      }
+      return;
+    }
+
+    setRegistrandoPonto(true);
+    setPontosErro(null);
+
+    try {
+      await registrarPontoColaborador({
+        membroId: membroDestino,
+        tipo: tipoPonto,
+        observacao: observacaoPonto || undefined
+      });
+      setObservacaoPonto('');
+      await carregarPontos();
+    } catch (error) {
+      console.error('Erro ao registrar ponto:', error);
+      setPontosErro('Não foi possível registrar o ponto do colaborador.');
+    } finally {
+      setRegistrandoPonto(false);
+    }
+  };
+
+  const resumoTarefas = useMemo(() => {
+    if (!tarefas.length) {
+      return { total: 0, concluidas: 0, pendentes: 0 };
+    }
+
+    if (isPatrao) {
+      const concluidas = tarefas.filter((tarefa) => Number(tarefa.totalConcluidas || 0) > 0).length;
+      return {
+        total: tarefas.length,
+        concluidas,
+        pendentes: tarefas.length - concluidas
+      };
+    }
+
+    const concluidas = tarefas.filter((tarefa) => tarefa.validacaoAtual?.status === 'concluida').length;
+    return {
+      total: tarefas.length,
+      concluidas,
+      pendentes: tarefas.length - concluidas
+    };
+  }, [isPatrao, tarefas]);
+
+  const obterStatusTarefa = useCallback((tarefa) => {
+    if (isPatrao) {
+      return Number(tarefa.totalConcluidas || 0) > 0 ? 'concluida' : 'pendente';
+    }
+    return tarefa.validacaoAtual?.status || 'pendente';
+  }, [isPatrao]);
 
   const handleUpload = async (event) => {
     const arquivo = event.target.files?.[0];
@@ -385,6 +701,274 @@ function Dashboard({ role = 'patrao' }) {
               </section>
             </>
           )}
+
+          <section className="operacional-controles">
+            <div className="operacional-card">
+              <div className="operacional-card__header">
+                <div>
+                  <h3>✅ Validação de atividades</h3>
+                  <p>Acompanhe as rotinas lançadas pelo gestor e confirme as entregas da equipe.</p>
+                </div>
+                {isPatrao ? (
+                  <div className="operacional-card__filtros">
+                    <label>
+                      Equipe
+                      <select value={filtroRoleTarefa} onChange={(event) => setFiltroRoleTarefa(event.target.value)}>
+                        <option value="asg">Serviços Gerais</option>
+                        <option value="enfermaria">Enfermagem</option>
+                        <option value="todas">Todas as equipes</option>
+                      </select>
+                    </label>
+                    <label>
+                      Colaborador
+                      <select
+                        value={filtroMembroId || ''}
+                        onChange={(event) =>
+                          setFiltroMembroId(event.target.value ? Number(event.target.value) : null)
+                        }
+                        disabled={filtroRoleTarefa === 'todas' || equipesCarregando || !equipesDirecao.length}
+                      >
+                        <option value="">Todos</option>
+                        {equipesDirecao.map((membro) => (
+                          <option key={membro.id} value={membro.id}>
+                            {membro.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={carregarTarefas}
+                      disabled={tarefasCarregando}
+                    >
+                      Atualizar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="operacional-card__meta">
+                    <span>
+                      <strong>{resumoTarefas.concluidas}</strong> concluídas
+                    </span>
+                    <span>
+                      <strong>{resumoTarefas.pendentes}</strong> pendentes
+                    </span>
+                    {colaboradorAtualNome && <span>Colaborador ativo: {colaboradorAtualNome}</span>}
+                    <div className="operacional-card__acoes">
+                      {onSolicitarTrocaMembro && (
+                        <button type="button" className="secondary-button" onClick={onSolicitarTrocaMembro}>
+                          Trocar colaborador
+                        </button>
+                      )}
+                      {onAtualizarEquipe && (
+                        <button type="button" className="secondary-button" onClick={onAtualizarEquipe}>
+                          Atualizar equipe
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {isPatrao && equipesErro && <div className="alerta erro">{equipesErro}</div>}
+              {tarefasErro && <div className="alerta erro">{tarefasErro}</div>}
+
+              {tarefasCarregando ? (
+                <div className="estado-carregando">Carregando tarefas...</div>
+              ) : tarefas.length ? (
+                <ul className="lista-tarefas">
+                  {tarefas.map((tarefa) => {
+                    const status = obterStatusTarefa(tarefa);
+                    const statusLabel = STATUS_LABELS[status] || status;
+                    const dataLimiteFormatada = formatarDataSimples(tarefa.dataLimite);
+                    return (
+                      <li key={tarefa.id} className={`tarefa-card tarefa-card--${status}`}>
+                        <div className="tarefa-card__info">
+                          <h4>{tarefa.titulo}</h4>
+                          {tarefa.descricao && <p>{tarefa.descricao}</p>}
+                          <div className="tarefa-card__meta">
+                            <span>{ROLE_NOMES[tarefa.roleDestino] || tarefa.roleDestino}</span>
+                            {dataLimiteFormatada && <span>Limite: {dataLimiteFormatada}</span>}
+                            {tarefa.documentoUrl && (
+                              <a href={tarefa.documentoUrl} target="_blank" rel="noreferrer">
+                                Documento
+                              </a>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="tarefa-card__acoes">
+                          <span className={`tarefa-status tarefa-status--${status}`}>{statusLabel}</span>
+                          {isPatrao ? (
+                            <div className="tarefa-card__validacoes">
+                              {tarefa.validacoes && tarefa.validacoes.length ? (
+                                tarefa.validacoes.map((item) => (
+                                  <div key={`${item.tarefaId}-${item.membroId}`} className="tarefa-card__validacao-item">
+                                    <strong>{item.membroNome || 'Equipe'}</strong>
+                                    <span>{STATUS_LABELS[item.status] || item.status}</span>
+                                    {item.concluidoEm && <span>{formatarDataHora(item.concluidoEm)}</span>}
+                                    {item.observacao && <p>{item.observacao}</p>}
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="tarefa-card__validacao-item vazio">Nenhuma validação registrada.</div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="tarefa-card__botoes">
+                              <button type="button" onClick={() => handleValidarTarefa(tarefa.id, 'concluida')}>
+                                Confirmar entrega
+                              </button>
+                              {status === 'concluida' && (
+                                <button type="button" onClick={() => handleValidarTarefa(tarefa.id, 'pendente')}>
+                                  Reabrir
+                                </button>
+                              )}
+                              <button type="button" onClick={() => handleValidarTarefa(tarefa.id, 'nao_realizada')}>
+                                Reportar impedimento
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className="operacional-card__vazio">
+                  {isPatrao
+                    ? 'Nenhuma tarefa cadastrada para esta equipe.'
+                    : 'Nenhuma tarefa pendente para este colaborador.'}
+                </div>
+              )}
+
+              {isPatrao && (
+                <form className="form-nova-tarefa" onSubmit={handleCriarTarefa}>
+                  <h4>Nova tarefa para a equipe</h4>
+                  <div className="form-nova-tarefa__grid">
+                    <div>
+                      <label htmlFor="tarefa-titulo">Título</label>
+                      <input
+                        id="tarefa-titulo"
+                        type="text"
+                        value={novaTarefa.titulo}
+                        onChange={(event) => setNovaTarefa((prev) => ({ ...prev, titulo: event.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="tarefa-equipe">Equipe</label>
+                      <select
+                        id="tarefa-equipe"
+                        value={novaTarefa.roleDestino}
+                        onChange={(event) => setNovaTarefa((prev) => ({ ...prev, roleDestino: event.target.value }))}
+                      >
+                        <option value="asg">Serviços Gerais</option>
+                        <option value="enfermaria">Enfermagem</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="tarefa-limite">Data limite</label>
+                      <input
+                        id="tarefa-limite"
+                        type="date"
+                        value={novaTarefa.dataLimite}
+                        onChange={(event) => setNovaTarefa((prev) => ({ ...prev, dataLimite: event.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="tarefa-documento">Documento / link (opcional)</label>
+                      <input
+                        id="tarefa-documento"
+                        type="url"
+                        placeholder="https://..."
+                        value={novaTarefa.documentoUrl}
+                        onChange={(event) => setNovaTarefa((prev) => ({ ...prev, documentoUrl: event.target.value }))}
+                      />
+                    </div>
+                    <div className="form-nova-tarefa__full">
+                      <label htmlFor="tarefa-descricao">Descrição</label>
+                      <textarea
+                        id="tarefa-descricao"
+                        rows={3}
+                        value={novaTarefa.descricao}
+                        onChange={(event) => setNovaTarefa((prev) => ({ ...prev, descricao: event.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <button type="submit" className="btn-primaria" disabled={criandoTarefa}>
+                    {criandoTarefa ? 'Salvando...' : 'Adicionar tarefa'}
+                  </button>
+                </form>
+              )}
+            </div>
+
+            <div className="operacional-card">
+              <div className="operacional-card__header">
+                <div>
+                  <h3>⏱️ Registro de ponto</h3>
+                  <p>Registre entradas, saídas e coberturas de plantão para manter o histórico do time.</p>
+                </div>
+                {!isPatrao && colaboradorAtualNome && (
+                  <span className="operacional-card__colaborador">Colaborador ativo: {colaboradorAtualNome}</span>
+                )}
+              </div>
+
+              {pontosErro && <div className="alerta erro">{pontosErro}</div>}
+
+              <form className="form-ponto" onSubmit={handleRegistrarPonto}>
+                <div className="form-ponto__grid">
+                  <div>
+                    <label htmlFor="ponto-tipo">Tipo de registro</label>
+                    <select id="ponto-tipo" value={tipoPonto} onChange={(event) => setTipoPonto(event.target.value)}>
+                      <option value="entrada">Entrada</option>
+                      <option value="saida">Saída</option>
+                      <option value="intervalo">Intervalo</option>
+                    </select>
+                  </div>
+                  <div className="form-ponto__observacao">
+                    <label htmlFor="ponto-observacao">Observação (opcional)</label>
+                    <input
+                      id="ponto-observacao"
+                      type="text"
+                      placeholder="Ex.: cobertura extra ou visita externa"
+                      value={observacaoPonto}
+                      onChange={(event) => setObservacaoPonto(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  className="btn-primaria"
+                  disabled={registrandoPonto || (isPatrao && !filtroMembroId)}
+                >
+                  {registrandoPonto ? 'Registrando...' : 'Registrar ponto'}
+                </button>
+              </form>
+
+              {pontosCarregando ? (
+                <div className="estado-carregando">Carregando registros...</div>
+              ) : pontos.length ? (
+                <ul className="lista-pontos">
+                  {pontos.map((registro) => (
+                    <li key={registro.id} className={`ponto-item ponto-item--${registro.tipo}`}>
+                      <div className="ponto-item__cabecalho">
+                        <strong>{registro.membroNome || 'Equipe'}</strong>
+                        <span>{ROLE_NOMES[registro.role] || 'Equipe'}</span>
+                      </div>
+                      <div className="ponto-item__meta">
+                        <span>{formatarDataHora(registro.registradoEm)}</span>
+                        <span className={`tag-ponto tag-ponto--${registro.tipo}`}>{registro.tipo}</span>
+                      </div>
+                      {registro.observacao && <p>{registro.observacao}</p>}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="operacional-card__vazio">Nenhum registro de ponto no período selecionado.</div>
+              )}
+            </div>
+          </section>
 
           <section className="graficos-grid">
             {mostrarSaude && (
