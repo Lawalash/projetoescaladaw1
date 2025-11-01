@@ -3,7 +3,7 @@
 Este documento consolida propostas de melhoria para responder às demandas recebidas pelos grupos **@Amor** e **@Número desconhecido**. As ações abaixo estão organizadas por fluxo de trabalho, com entregáveis claros e responsáveis sugeridos para facilitar o acompanhamento.
 
 ## 1. Gestão de Estoques (Limpeza, Despensa e Farmácia)
-- **Inventário mensal integrado**: implementar checklists digitais no AuroraCare (módulo de estoque) com categorias separadas para material de limpeza, gêneros alimentícios e itens farmacêuticos. O mesmo formulário gera três relatórios: limpeza, despensa e farmácia.
+- **Inventário mensal integrado**: implementar checklists digitais no A2 Data Monitoramento Ocupacional (módulo de estoque) com categorias separadas para material de limpeza, gêneros alimentícios e itens farmacêuticos. O mesmo formulário gera três relatórios: limpeza, despensa e farmácia.
 - **Classificação ABC**: priorizar itens de alto giro (classe A) para revisões semanais. Ex.: detergente, desinfetante, luvas descartáveis, medicações contínuas e fraldas geriátricas.
 - **Alertas de compra automática**: configurar limites mínimos no dashboard para disparar notificações por e-mail/WhatsApp quando o saldo atingir 30% do consumo médio.
 - **Histórico de consumo**: alimentar o ETL com dados de movimentação para gerar gráficos de tendência (ex.: comparativo mensal de ampolas e fraldas), apoiando decisões de compra.

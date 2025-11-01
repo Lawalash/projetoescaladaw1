@@ -26,7 +26,7 @@ exports.enviarEmail = async (destinatario, assunto, htmlContent) => {
     const transporter = criarTransportadorEmail();
     
     const info = await transporter.sendMail({
-      from: `"${process.env.EMAIL_FROM_NAME || 'AuroraCare'}" <${process.env.EMAIL_FROM}>`,
+      from: `"${process.env.EMAIL_FROM_NAME || 'A2 Data Monitoramento Ocupacional'}" <${process.env.EMAIL_FROM}>`,
       to: destinatario,
       subject: assunto,
       html: htmlContent
@@ -192,7 +192,7 @@ exports.gerarHTMLRelatorio = (dados) => {
       <body>
         <div class="wrapper">
           <div class="header">
-            <h1>Relatório AuroraCare</h1>
+            <h1>Relatório · A2 Data Monitoramento Ocupacional</h1>
             <p>${periodo || 'Período atual'} · ${new Date().toLocaleDateString('pt-BR')}</p>
           </div>
           <div class="content">
@@ -213,7 +213,7 @@ exports.gerarHTMLRelatorio = (dados) => {
             <ul>${listaEstoque || '<li>Nenhum item crítico detectado</li>'}</ul>
           </div>
           <div class="footer">
-            AuroraCare · Tecnologia para cuidado humanizado · ${new Date().toLocaleString('pt-BR')}
+            A2 Data Consultoria e Tecnologia · Monitoramento Ocupacional · ${new Date().toLocaleString('pt-BR')}
           </div>
         </div>
       </body>
@@ -244,13 +244,13 @@ exports.enviarRelatorioAutomatico = async (dadosRelatorio) => {
           const html = exports.gerarHTMLRelatorio(dadosRelatorio);
           await exports.enviarEmail(
             dest.destinatario,
-            'AuroraCare · Atualização automatizada',
+            'A2 Data Monitoramento Ocupacional · Atualização automatizada',
             html
           );
           resultados.push({ tipo: 'email', destinatario: dest.destinatario, status: 'enviado' });
         } else if (dest.tipo_envio === 'whatsapp') {
           const mensagem = `
-📊 *AuroraCare - Resumo do lar*
+📊 *A2 Data Monitoramento Ocupacional - Resumo do lar*
 
 *Período:* ${dadosRelatorio.periodo}
 *Residentes ativos:* ${dadosRelatorio.residentesAtivos}

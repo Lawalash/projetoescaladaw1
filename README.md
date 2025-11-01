@@ -1,6 +1,6 @@
-# AuroraCare — Plataforma integrada para lares de idosos
+# A2 Data Monitoramento Ocupacional — Plataforma integrada para lares de idosos
 
-AuroraCare unifica backend, frontend e automações de ETL para apoiar a rotina de um lar de idosos. O objetivo é monitorar
+A solução A2 Data Monitoramento Ocupacional unifica backend, frontend e automações de ETL para apoiar a rotina de um lar de idosos. O objetivo é monitorar
 indicadores clínicos, cronogramas de atividades, estoques críticos e pendências da equipe em uma experiência única.
 
 ## 🗂️ Estrutura de pastas
@@ -33,7 +33,7 @@ DB_USER=root
 DB_PASSWORD=suasenha
 DB_NAME=qw1_relatorios
 CORS_ORIGIN=http://localhost:5173
-JWT_SECRET=auroracare-super-secreto
+JWT_SECRET=a2data-monitoramento-super-secreto
 ENV
 
 # recrie as tabelas e dados de demonstração
@@ -66,11 +66,12 @@ python etl.py --file ../sample_data/estoque_alimentos.xlsx --tipo estoque_alimen
 
 Após executar `npm run db:reset` você pode acessar o sistema com os seguintes usuários:
 
-| Perfil            | E-mail                        | Senha         | Destino no portal |
-|-------------------|-------------------------------|---------------|-------------------|
-| Direção           | `direcao@auroracare.com`      | `patroes123`  | Dashboard completo + relatório da equipe |
-| Serviços gerais   | `asg@auroracare.com`          | `limpeza123`  | Painel focado em limpeza, estoque e tarefas |
-| Enfermagem        | `enfermaria@auroracare.com`   | `enfermaria123` | Visão clínica com indicadores de saúde |
+| Perfil            | E-mail                          | Senha            | Destino no portal |
+|-------------------|----------------------------------|------------------|-------------------|
+| Direção           | `direcao@a2data.com.br`          | `patroes123`     | Dashboard completo + relatório da equipe |
+| Supervisora ASG   | `supervisao@a2data.com.br`       | `supervisao123`  | Painel da supervisão e distribuição de tarefas |
+| Serviços gerais   | `asg@a2data.com.br`              | `limpeza123`     | Painel focado em limpeza, estoque e tarefas |
+| Enfermagem        | `enfermagem@a2data.com.br`       | `enfermagem123`  | Visão clínica com indicadores de saúde |
 
 A autenticação utiliza tokens assinados via HMAC (HS256). Para ajustar a expiração ou o segredo, altere `JWT_SECRET` no
 arquivo `.env` do backend.
@@ -82,9 +83,10 @@ padrão listadas acima):
 
 ```sql
 INSERT INTO usuarios (nome, email, senha_hash, role) VALUES
-  ('Direção Aurora', 'direcao@auroracare.com', '0c45f9e259b99c03387c815565161972:64ec71cf9dac69997110a9c5c829a4bae9e60184442e6cc12ea529c41eaf5033706f13d65e964ed947c62b6895b59ae40f08a08f21836d96b080c19041b01b14', 'patrao'),
-  ('Time de Limpeza', 'asg@auroracare.com', 'd6fe599427fa09b7063496edb730b149:2f995eb82d6e47396c8ede64f625466dd4a4201a6fac7a52dd236c3ef16020ec8c2d179be7ef2afd392e45d4083852fee1df2eaebbd6ba9a0a5330d3c06571db', 'asg'),
-  ('Coordenação Enfermagem', 'enfermaria@auroracare.com', '054146d86900a461c1788d186f460d8d:9a9d6f5a590c4f92d7e6e29e481074f33583b5d947d39b4988433a0880431cd3de252abca8efede2dd691212371da0856a526e5e31ea4377063d1600057713fc', 'enfermaria');
+  ('Direção A2 Data', 'direcao@a2data.com.br', '0c45f9e259b99c03387c815565161972:64ec71cf9dac69997110a9c5c829a4bae9e60184442e6cc12ea529c41eaf5033706f13d65e964ed947c62b6895b59ae40f08a08f21836d96b080c19041b01b14', 'patrao'),
+  ('Supervisora Vitória Barboza Silveira', 'supervisao@a2data.com.br', '8caa2b793c04c07473374a4d3afd2977:2cb2ba96c0060e221e980e394b0f25f11d59ee853db70961e7bc5702cda80407a41b63915590b25937866fdfeb9d947', 'supervisora'),
+  ('Equipe de Serviços Gerais', 'asg@a2data.com.br', 'd6fe599427fa09b7063496edb730b149:2f995eb82d6e47396c8ede64f625466dd4a4201a6fac7a52dd236c3ef16020ec8c2d179be7ef2afd392e45d4083852fee1df2eaebbd6ba9a0a5330d3c06571db', 'asg'),
+  ('Técnica de Enfermagem', 'enfermagem@a2data.com.br', '054146d86900a461c1788d186f460d8d:9a9d6f5a590c4f92d7e6e29e481074f33583b5d947d39b4988433a0880431cd3de252abca8efede2dd691212371da0856a526e5e31ea4377063d1600057713fc', 'enfermaria');
 ```
 
 > Observação: a tabela `usuarios` é criada automaticamente pelo script `npm run db:reset`. Execute a query apenas caso esteja
@@ -107,4 +109,4 @@ INSERT INTO usuarios (nome, email, senha_hash, role) VALUES
 3. Envie uma planilha de estoque pela área de serviços gerais e valide a atualização dos indicadores.
 4. Revise o relatório da equipe na visão da direção para acompanhar pendências e recomendações.
 
-Bom trabalho e bons cuidados! 🏡💙
+Bom trabalho e bons cuidados! A tecnologia está a favor da equipe.

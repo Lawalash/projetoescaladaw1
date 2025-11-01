@@ -4,7 +4,7 @@ const cron = require('node-cron');
 const { query } = require('../src/db/connection');
 const notificationService = require('../src/services/notificationService');
 
-console.log('🕐 Iniciando serviço de agendamento AuroraCare...');
+console.log('🕐 Iniciando serviço de agendamento A2 Data Monitoramento Ocupacional...');
 
 // Verificar se cron está habilitado
 if (process.env.ENABLE_CRON !== 'true') {

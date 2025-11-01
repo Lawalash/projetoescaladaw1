@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ETL AuroraCare - Importação de planilhas para o banco do lar"""
+"""ETL A2 Data Monitoramento Ocupacional - Importação de planilhas para o banco do lar"""
 
 from __future__ import annotations
 
@@ -196,7 +196,7 @@ def importar_planilha(caminho: str, tipo: str, engine) -> ResultadoETL:
 
 
 def main(argv: List[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Importar planilhas para o AuroraCare")
+    parser = argparse.ArgumentParser(description="Importar planilhas para o A2 Data Monitoramento Ocupacional")
     parser.add_argument("--file", required=True, help="Caminho para a planilha CSV/XLSX")
     parser.add_argument(
         "--tipo",

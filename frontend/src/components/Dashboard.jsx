@@ -22,7 +22,8 @@ import {
   registrarPontoColaborador,
   listarPontosColaboradores,
   criarTarefaOperacional,
-  obterEquipeOperacional
+  obterEquipeOperacional,
+  importarPontosColaboradores
 } from '../services/api';
 import './styles/Dashboard.css';
 
@@ -30,12 +31,18 @@ const formatarNumero = (valor) => new Intl.NumberFormat('pt-BR').format(Number(v
 const formatarPercentual = (valor) => `${Number(valor || 0).toFixed(1)}%`;
 const ROLE_NOMES = {
   asg: 'Serviços Gerais',
-  enfermaria: 'Enfermagem'
+  enfermaria: 'Enfermagem',
+  supervisora: 'Supervisão ASG'
 };
 const STATUS_LABELS = {
   concluida: 'Concluída',
   pendente: 'Pendente',
   nao_realizada: 'Não realizada'
+};
+const RECORRENCIA_LABELS = {
+  unica: 'Única',
+  diaria: 'Diária',
+  semanal: 'Semanal'
 };
 const formatarDataSimples = (valor) => {
   if (!valor) return '';
@@ -79,15 +86,20 @@ function Dashboard({
   const [pontos, setPontos] = useState([]);
   const [pontosCarregando, setPontosCarregando] = useState(false);
   const [pontosErro, setPontosErro] = useState(null);
-  const [filtroRoleTarefa, setFiltroRoleTarefa] = useState(role === 'patrao' ? 'asg' : role);
+  const [filtroRoleTarefa, setFiltroRoleTarefa] = useState(
+    role === 'patrao' ? 'asg' : role === 'supervisora' ? 'asg' : role
+  );
   const [filtroMembroId, setFiltroMembroId] = useState(null);
-  const [novaTarefa, setNovaTarefa] = useState({
+  const [novaTarefa, setNovaTarefa] = useState(() => ({
     titulo: '',
     descricao: '',
-    roleDestino: 'asg',
+    roleDestino: role === 'supervisora' ? 'asg' : 'asg',
     dataLimite: '',
-    documentoUrl: ''
-  });
+    documentoUrl: '',
+    recorrencia: 'unica',
+    destinoTipo: 'individual',
+    destinatarios: []
+  }));
   const [criandoTarefa, setCriandoTarefa] = useState(false);
   const [equipesDirecao, setEquipesDirecao] = useState([]);
   const [equipesCarregando, setEquipesCarregando] = useState(false);
@@ -95,11 +107,17 @@ function Dashboard({
   const [registrandoPonto, setRegistrandoPonto] = useState(false);
   const [observacaoPonto, setObservacaoPonto] = useState('');
   const [tipoPonto, setTipoPonto] = useState('entrada');
+  const [colaboradoresPorRole, setColaboradoresPorRole] = useState({});
+  const [importandoPontos, setImportandoPontos] = useState(false);
+  const [pontosImportStatus, setPontosImportStatus] = useState(null);
 
   const isPatrao = role === 'patrao';
+  const isSupervisora = role === 'supervisora';
   const isASG = role === 'asg';
   const isEnfermaria = role === 'enfermaria';
+  const podeCriarTarefas = isPatrao || isSupervisora;
   const permitirUpload = isPatrao || isASG;
+  const permitirImportarPontos = isPatrao || isSupervisora;
   const mostrarKPIs = !isASG;
   const mostrarSaude = isPatrao || isEnfermaria;
   const mostrarMedicacao = isPatrao || isEnfermaria;
@@ -108,16 +126,61 @@ function Dashboard({
   const membroAtivoId = membroAtivo?.id || null;
   const membroFiltro = isPatrao ? filtroMembroId : membroAtivoId;
   const colaboradorAtualNome = membroAtivo?.nome;
+  const colaboradoresDisponiveis = useMemo(() => {
+    if (!podeCriarTarefas) return [];
+    if (isSupervisora) {
+      return membrosEquipe.filter((item) => item.role === 'asg');
+    }
+    return colaboradoresPorRole[novaTarefa.roleDestino] || [];
+  }, [
+    colaboradoresPorRole,
+    membrosEquipe,
+    novaTarefa.roleDestino,
+    podeCriarTarefas,
+    isSupervisora
+  ]);
+
+  useEffect(() => {
+    if (novaTarefa.destinoTipo !== 'individual') {
+      setNovaTarefa((prev) => (prev.destinatarios.length ? { ...prev, destinatarios: [] } : prev));
+      return;
+    }
+
+    const idsDisponiveis = new Set(colaboradoresDisponiveis.map((item) => Number(item.id)));
+    setNovaTarefa((prev) => {
+      const filtrados = prev.destinatarios.filter((id) => idsDisponiveis.has(Number(id)));
+      if (filtrados.length === prev.destinatarios.length) {
+        return prev;
+      }
+      return { ...prev, destinatarios: filtrados };
+    });
+  }, [colaboradoresDisponiveis, novaTarefa.destinoTipo]);
+
+  useEffect(() => {
+    if (novaTarefa.destinoTipo !== 'individual') return;
+    if (!colaboradoresDisponiveis.length) return;
+
+    setNovaTarefa((prev) => {
+      if (prev.destinatarios.length) return prev;
+      if (colaboradoresDisponiveis.length === 1) {
+        return {
+          ...prev,
+          destinatarios: [Number(colaboradoresDisponiveis[0].id)]
+        };
+      }
+      return prev;
+    });
+  }, [colaboradoresDisponiveis, novaTarefa.destinoTipo]);
 
   useEffect(() => {
     carregarPainel();
   }, [inicio, fim]);
 
   useEffect(() => {
-    if (!isPatrao) {
+    if (!isPatrao && !isSupervisora) {
       setFiltroRoleTarefa(role);
     }
-  }, [isPatrao, role]);
+  }, [isPatrao, isSupervisora, role]);
 
   useEffect(() => {
     if (!isPatrao) {
@@ -134,13 +197,43 @@ function Dashboard({
   }, [filtroRoleTarefa, isPatrao]);
 
   useEffect(() => {
-    if (!isPatrao) return;
+    if (!podeCriarTarefas) return;
+    const destino = isSupervisora ? 'asg' : novaTarefa.roleDestino;
+    if (!destino) return;
+    if (isSupervisora && destino !== 'asg') return;
+    if (colaboradoresPorRole[destino]) return;
+
+    let ativo = true;
+    obterEquipeOperacional({ role: destino })
+      .then((resposta) => {
+        if (!ativo) return;
+        setColaboradoresPorRole((anterior) => ({
+          ...anterior,
+          [destino]: resposta?.membros || []
+        }));
+      })
+      .catch((error) => {
+        if (!ativo) return;
+        console.error('Erro ao carregar colaboradores para criação de tarefa:', error);
+      });
+
+    return () => {
+      ativo = false;
+    };
+  }, [colaboradoresPorRole, novaTarefa.roleDestino, podeCriarTarefas, isSupervisora]);
+
+  useEffect(() => {
+    if (!isPatrao && !isSupervisora) return;
 
     let ativo = true;
     setEquipesCarregando(true);
     setEquipesErro(null);
 
-    const roleConsulta = filtroRoleTarefa && filtroRoleTarefa !== 'todas' ? filtroRoleTarefa : undefined;
+    const roleConsulta = isPatrao
+      ? filtroRoleTarefa && filtroRoleTarefa !== 'todas'
+        ? filtroRoleTarefa
+        : undefined
+      : filtroRoleTarefa;
 
     obterEquipeOperacional({ role: roleConsulta })
       .then((resposta) => {
@@ -167,7 +260,7 @@ function Dashboard({
     return () => {
       ativo = false;
     };
-  }, [isPatrao, filtroRoleTarefa]);
+  }, [isPatrao, isSupervisora, filtroRoleTarefa]);
 
   const carregarPainel = async () => {
     setCarregando(true);
@@ -194,7 +287,9 @@ function Dashboard({
         ? filtroRoleTarefa && filtroRoleTarefa !== 'todas'
           ? filtroRoleTarefa
           : undefined
-        : role;
+        : isSupervisora
+          ? filtroRoleTarefa
+          : role;
       if (roleConsulta) {
         params.role = roleConsulta;
       }
@@ -286,6 +381,14 @@ function Dashboard({
       return;
     }
 
+    if (
+      novaTarefa.destinoTipo === 'individual' &&
+      (!novaTarefa.destinatarios || !novaTarefa.destinatarios.length)
+    ) {
+      setTarefasErro('Selecione ao menos um colaborador para a tarefa.');
+      return;
+    }
+
     setCriandoTarefa(true);
     setTarefasErro(null);
 
@@ -295,7 +398,13 @@ function Dashboard({
         descricao: novaTarefa.descricao.trim(),
         roleDestino: novaTarefa.roleDestino,
         dataLimite: novaTarefa.dataLimite || undefined,
-        documentoUrl: novaTarefa.documentoUrl || undefined
+        documentoUrl: novaTarefa.documentoUrl || undefined,
+        recorrencia: novaTarefa.recorrencia,
+        destinoTipo: novaTarefa.destinoTipo,
+        destinatarios:
+          novaTarefa.destinoTipo === 'individual'
+            ? novaTarefa.destinatarios.map((id) => Number(id))
+            : undefined
       });
 
       setNovaTarefa((anterior) => ({
@@ -303,7 +412,10 @@ function Dashboard({
         titulo: '',
         descricao: '',
         dataLimite: '',
-        documentoUrl: ''
+        documentoUrl: '',
+        recorrencia: 'unica',
+        destinoTipo: 'individual',
+        destinatarios: []
       }));
 
       if (isPatrao && filtroRoleTarefa !== novaTarefa.roleDestino) {
@@ -346,6 +458,29 @@ function Dashboard({
       setPontosErro('Não foi possível registrar o ponto do colaborador.');
     } finally {
       setRegistrandoPonto(false);
+    }
+  };
+
+  const handleImportarPontos = async (event) => {
+    const arquivo = event.target.files?.[0];
+    if (!arquivo) return;
+
+    setImportandoPontos(true);
+    setPontosImportStatus(null);
+
+    try {
+      const resposta = await importarPontosColaboradores({ arquivo });
+      const mensagemSucesso = `Importados ${resposta.importados || 0} de ${resposta.totalPlanilha || 0} registros.`;
+      setPontosImportStatus({ tipo: 'sucesso', mensagem: mensagemSucesso });
+      await carregarPontos();
+    } catch (error) {
+      console.error('Erro ao importar planilha de pontos:', error);
+      const mensagemErro = error?.response?.data?.error || 'Não foi possível importar a planilha de pontos.';
+      setPontosImportStatus({ tipo: 'erro', mensagem: mensagemErro });
+    } finally {
+      setImportandoPontos(false);
+      // eslint-disable-next-line no-param-reassign
+      event.target.value = '';
     }
   };
 
@@ -393,7 +528,7 @@ function Dashboard({
 
       setUploadStatus({
         status: 'sucesso',
-        mensagem: `✅ ${resposta.inseridos} registros importados com sucesso.`
+        mensagem: `${resposta.inseridos} registros importados com sucesso.`
       });
       carregarPainel();
     } catch (error) {
@@ -706,17 +841,18 @@ function Dashboard({
             <div className="operacional-card">
               <div className="operacional-card__header">
                 <div>
-                  <h3>✅ Validação de atividades</h3>
+                  <h3>Validação de atividades</h3>
                   <p>Acompanhe as rotinas lançadas pelo gestor e confirme as entregas da equipe.</p>
                 </div>
-                {isPatrao ? (
+                {(isPatrao || isSupervisora) ? (
                   <div className="operacional-card__filtros">
                     <label>
                       Equipe
                       <select value={filtroRoleTarefa} onChange={(event) => setFiltroRoleTarefa(event.target.value)}>
                         <option value="asg">Serviços Gerais</option>
-                        <option value="enfermaria">Enfermagem</option>
-                        <option value="todas">Todas as equipes</option>
+                        {(isPatrao || isSupervisora) && <option value="supervisora">Supervisão ASG</option>}
+                        {isPatrao && <option value="enfermaria">Enfermagem</option>}
+                        {isPatrao && <option value="todas">Todas as equipes</option>}
                       </select>
                     </label>
                     <label>
@@ -726,7 +862,11 @@ function Dashboard({
                         onChange={(event) =>
                           setFiltroMembroId(event.target.value ? Number(event.target.value) : null)
                         }
-                        disabled={filtroRoleTarefa === 'todas' || equipesCarregando || !equipesDirecao.length}
+                        disabled={
+                          (isPatrao && filtroRoleTarefa === 'todas') ||
+                          equipesCarregando ||
+                          !equipesDirecao.length
+                        }
                       >
                         <option value="">Todos</option>
                         {equipesDirecao.map((membro) => (
@@ -781,6 +921,11 @@ function Dashboard({
                     const status = obterStatusTarefa(tarefa);
                     const statusLabel = STATUS_LABELS[status] || status;
                     const dataLimiteFormatada = formatarDataSimples(tarefa.dataLimite);
+                    const recorrenciaLabel = RECORRENCIA_LABELS[tarefa.recorrencia] || 'Única';
+                    const destinoResumo =
+                      tarefa.destinoTipo === 'equipe'
+                        ? 'Aplicação: equipe completa'
+                        : `Aplicação: ${tarefa.destinatarios?.length || 0} colaborador(es)`;
                     return (
                       <li key={tarefa.id} className={`tarefa-card tarefa-card--${status}`}>
                         <div className="tarefa-card__info">
@@ -788,6 +933,8 @@ function Dashboard({
                           {tarefa.descricao && <p>{tarefa.descricao}</p>}
                           <div className="tarefa-card__meta">
                             <span>{ROLE_NOMES[tarefa.roleDestino] || tarefa.roleDestino}</span>
+                            <span>{recorrenciaLabel}</span>
+                            <span>{destinoResumo}</span>
                             {dataLimiteFormatada && <span>Limite: {dataLimiteFormatada}</span>}
                             {tarefa.documentoUrl && (
                               <a href={tarefa.documentoUrl} target="_blank" rel="noreferrer">
@@ -795,6 +942,18 @@ function Dashboard({
                               </a>
                             )}
                           </div>
+                          {tarefa.destinatarios && tarefa.destinatarios.length > 0 && (
+                            <div className="tarefa-card__destinatarios">
+                              {tarefa.destinatarios.map((destinatario) => (
+                                <span
+                                  key={`${tarefa.id}-${destinatario.membroId || destinatario.nome}`}
+                                  className={`tarefa-chip tarefa-chip--${destinatario.status || 'pendente'}`}
+                                >
+                                  {destinatario.nome || 'Equipe'}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         <div className="tarefa-card__acoes">
@@ -842,9 +1001,9 @@ function Dashboard({
                 </div>
               )}
 
-              {isPatrao && (
+              {podeCriarTarefas && (
                 <form className="form-nova-tarefa" onSubmit={handleCriarTarefa}>
-                  <h4>Nova tarefa para a equipe</h4>
+                  <h4>{isPatrao ? 'Nova tarefa para a equipe' : 'Designar rotina para a equipe ASG'}</h4>
                   <div className="form-nova-tarefa__grid">
                     <div>
                       <label htmlFor="tarefa-titulo">Título</label>
@@ -861,10 +1020,41 @@ function Dashboard({
                       <select
                         id="tarefa-equipe"
                         value={novaTarefa.roleDestino}
-                        onChange={(event) => setNovaTarefa((prev) => ({ ...prev, roleDestino: event.target.value }))}
+                        onChange={(event) =>
+                          setNovaTarefa((prev) => ({ ...prev, roleDestino: event.target.value }))
+                        }
+                        disabled={isSupervisora}
                       >
                         <option value="asg">Serviços Gerais</option>
                         <option value="enfermaria">Enfermagem</option>
+                        {isPatrao && <option value="supervisora">Supervisão ASG</option>}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="tarefa-recorrencia">Recorrência</label>
+                      <select
+                        id="tarefa-recorrencia"
+                        value={novaTarefa.recorrencia}
+                        onChange={(event) =>
+                          setNovaTarefa((prev) => ({ ...prev, recorrencia: event.target.value }))
+                        }
+                      >
+                        <option value="unica">Única</option>
+                        <option value="diaria">Diária</option>
+                        <option value="semanal">Semanal</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="tarefa-destino">Aplicação</label>
+                      <select
+                        id="tarefa-destino"
+                        value={novaTarefa.destinoTipo}
+                        onChange={(event) =>
+                          setNovaTarefa((prev) => ({ ...prev, destinoTipo: event.target.value }))
+                        }
+                      >
+                        <option value="individual">Por colaborador</option>
+                        <option value="equipe">Toda a equipe</option>
                       </select>
                     </div>
                     <div>
@@ -886,6 +1076,38 @@ function Dashboard({
                         onChange={(event) => setNovaTarefa((prev) => ({ ...prev, documentoUrl: event.target.value }))}
                       />
                     </div>
+                    {novaTarefa.destinoTipo === 'individual' && (
+                      <div className="form-nova-tarefa__full">
+                        <label htmlFor="tarefa-destinatarios">Colaboradores</label>
+                        {colaboradoresDisponiveis.length ? (
+                          <select
+                            id="tarefa-destinatarios"
+                            multiple
+                            value={novaTarefa.destinatarios.map(String)}
+                            onChange={(event) => {
+                              const selecionados = Array.from(event.target.selectedOptions).map((option) =>
+                                Number(option.value)
+                              );
+                              setNovaTarefa((prev) => ({ ...prev, destinatarios: selecionados }));
+                            }}
+                          >
+                            {colaboradoresDisponiveis.map((membro) => (
+                              <option key={membro.id} value={membro.id}>
+                                {membro.nome}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="texto-suporte">Nenhum colaborador disponível para seleção.</div>
+                        )}
+                        <span className="texto-ajuda">Use Ctrl/Cmd para selecionar vários nomes.</span>
+                      </div>
+                    )}
+                    {novaTarefa.destinoTipo === 'equipe' && (
+                      <div className="form-nova-tarefa__full texto-suporte">
+                        Esta tarefa será distribuída automaticamente para todos os membros ativos da equipe.
+                      </div>
+                    )}
                     <div className="form-nova-tarefa__full">
                       <label htmlFor="tarefa-descricao">Descrição</label>
                       <textarea
@@ -906,13 +1128,35 @@ function Dashboard({
             <div className="operacional-card">
               <div className="operacional-card__header">
                 <div>
-                  <h3>⏱️ Registro de ponto</h3>
-                  <p>Registre entradas, saídas e coberturas de plantão para manter o histórico do time.</p>
+                  <h3>Registro de ponto</h3>
+                  <p>Registre entradas, saídas e contingências para manter o histórico atualizado da equipe.</p>
                 </div>
                 {!isPatrao && colaboradorAtualNome && (
                   <span className="operacional-card__colaborador">Colaborador ativo: {colaboradorAtualNome}</span>
                 )}
               </div>
+
+              {permitirImportarPontos && (
+                <div className="importacao-pontos">
+                  <label className="secondary-button" htmlFor="input-importar-pontos">
+                    {importandoPontos ? 'Importando...' : 'Importar planilha de pontos'}
+                  </label>
+                  <input
+                    id="input-importar-pontos"
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    onChange={handleImportarPontos}
+                    disabled={importandoPontos}
+                    hidden
+                  />
+                </div>
+              )}
+
+              {pontosImportStatus && (
+                <div className={`alerta ${pontosImportStatus.tipo === 'erro' ? 'erro' : 'sucesso'}`}>
+                  {pontosImportStatus.mensagem}
+                </div>
+              )}
 
               {pontosErro && <div className="alerta erro">{pontosErro}</div>}
 
