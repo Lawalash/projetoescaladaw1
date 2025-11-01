@@ -23,7 +23,7 @@ import './styles/Dashboard.css';
 const formatarNumero = (valor) => new Intl.NumberFormat('pt-BR').format(Number(valor || 0));
 const formatarPercentual = (valor) => `${Number(valor || 0).toFixed(1)}%`;
 
-function Dashboard() {
+function Dashboard({ role = 'patrao' }) {
   const [inicio, setInicio] = useState(format(subDays(new Date(), 29), 'yyyy-MM-dd'));
   const [fim, setFim] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [painel, setPainel] = useState(null);
@@ -32,6 +32,16 @@ function Dashboard() {
   const [uploadStatus, setUploadStatus] = useState(null);
   const [uploadTipo, setUploadTipo] = useState('alimentos');
   const [uploadResponsavel, setUploadResponsavel] = useState('');
+
+  const isPatrao = role === 'patrao';
+  const isASG = role === 'asg';
+  const isEnfermaria = role === 'enfermaria';
+  const permitirUpload = isPatrao || isASG;
+  const mostrarKPIs = !isASG;
+  const mostrarSaude = isPatrao || isEnfermaria;
+  const mostrarMedicacao = isPatrao || isEnfermaria;
+  const mostrarEstoque = isPatrao || isASG;
+  const mostrarPlanilhas = isPatrao || isASG;
 
   useEffect(() => {
     carregarPainel();
@@ -134,6 +144,54 @@ function Dashboard() {
     return [...alimentos, ...limpeza];
   }, [painel]);
 
+  const inventarioResumo = useMemo(() => {
+    const calcular = (lista = []) => {
+      if (!lista.length) {
+        return { coberturaMedia: 0, itensCriticos: 0 };
+      }
+
+      const coberturaValida = lista
+        .map((item) => Number(item.coberturaDias || 0))
+        .filter((valor) => Number.isFinite(valor));
+
+      const somaCobertura = coberturaValida.reduce((acc, valor) => acc + valor, 0);
+      const itensCriticos = lista.reduce((acc, item) => acc + Number(item.itensCriticos || 0), 0);
+
+      return {
+        coberturaMedia: coberturaValida.length ? Number((somaCobertura / coberturaValida.length).toFixed(1)) : 0,
+        itensCriticos
+      };
+    };
+
+    return {
+      alimentos: calcular(painel?.inventario?.alimentos || []),
+      limpeza: calcular(painel?.inventario?.limpeza || [])
+    };
+  }, [painel]);
+
+  const itensCriticosTotal = inventarioResumo.alimentos.itensCriticos + inventarioResumo.limpeza.itensCriticos;
+  const alertasAtivos = painel?.alertas?.length || 0;
+  const planilhasRecentes = painel?.planilhas?.length || 0;
+  const categoriaCriticaLimpeza = painel?.inventario?.limpeza?.find((item) => Number(item.itensCriticos || 0) > 0)?.categoria;
+  const categoriaCriticaAlimentos = painel?.inventario?.alimentos?.find((item) => Number(item.itensCriticos || 0) > 0)?.categoria;
+  const ultimaPlanilha = painel?.planilhas?.[0];
+
+  const tarefas48h = useMemo(() => {
+    if (!painel?.cronograma) {
+      return 0;
+    }
+
+    const agora = new Date();
+    const limite = new Date();
+    limite.setDate(agora.getDate() + 2);
+
+    return painel.cronograma.filter((item) => {
+      if (!item.data) return false;
+      const dataItem = parseISO(item.data);
+      return dataItem >= agora && dataItem <= limite;
+    }).length;
+  }, [painel]);
+
   if (carregando && !painel) {
     return (
       <div className="dashboard-loading">
@@ -168,32 +226,34 @@ function Dashboard() {
           </button>
         </div>
 
-        <div className="upload-wrapper">
-          <div className="upload-meta">
-            <label htmlFor="tipo-planilha">Tipo de estoque</label>
-            <select
-              id="tipo-planilha"
-              value={uploadTipo}
-              onChange={(event) => setUploadTipo(event.target.value)}
-            >
-              <option value="alimentos">Alimentos</option>
-              <option value="limpeza">Produtos de limpeza</option>
-            </select>
+        {permitirUpload && (
+          <div className="upload-wrapper">
+            <div className="upload-meta">
+              <label htmlFor="tipo-planilha">Tipo de estoque</label>
+              <select
+                id="tipo-planilha"
+                value={uploadTipo}
+                onChange={(event) => setUploadTipo(event.target.value)}
+              >
+                <option value="alimentos">Alimentos</option>
+                <option value="limpeza">Produtos de limpeza</option>
+              </select>
+            </div>
+
+            <input
+              type="text"
+              className="input-responsavel"
+              placeholder="Responsável pelo envio"
+              value={uploadResponsavel}
+              onChange={(event) => setUploadResponsavel(event.target.value)}
+            />
+
+            <label className="btn-upload">
+              📁 Enviar planilha
+              <input type="file" accept=".csv,.xlsx,.xls" onChange={handleUpload} />
+            </label>
           </div>
-
-          <input
-            type="text"
-            className="input-responsavel"
-            placeholder="Responsável pelo envio"
-            value={uploadResponsavel}
-            onChange={(event) => setUploadResponsavel(event.target.value)}
-          />
-
-          <label className="btn-upload">
-            📁 Enviar planilha
-            <input type="file" accept=".csv,.xlsx,.xls" onChange={handleUpload} />
-          </label>
-        </div>
+        )}
       </div>
 
       {uploadStatus && (
@@ -204,162 +264,237 @@ function Dashboard() {
 
       {painel && (
         <>
-          <section className="kpis">
-            <article className="kpi-card">
-              <div className="kpi-icon residentes">👵</div>
-              <div>
-                <h4>Residentes Ativos</h4>
-                <p className="kpi-valor">{formatarNumero(painel.resumo?.residentesAtivos)}</p>
-                <span>{formatarNumero(painel.resumo?.residentesObservacao)} em observação</span>
-              </div>
-            </article>
+          {isASG ? (
+            <>
+              <section className="kpis">
+                <article className="kpi-card">
+                  <div className="kpi-icon estoque">🥕</div>
+                  <div>
+                    <h4>Cobertura de alimentos</h4>
+                    <p className="kpi-valor">{`${inventarioResumo.alimentos.coberturaMedia || 0} dias`}</p>
+                    <span>{inventarioResumo.alimentos.itensCriticos} itens críticos</span>
+                  </div>
+                </article>
 
-            <article className="kpi-card">
-              <div className="kpi-icon ocupacao">🏥</div>
-              <div>
-                <h4>Taxa de Ocupação</h4>
-                <p className="kpi-valor">{formatarPercentual(painel.resumo?.taxaOcupacao)}</p>
-                <span>{formatarNumero(painel.resumo?.residentesInternados)} residentes internados</span>
-              </div>
-            </article>
+                <article className="kpi-card">
+                  <div className="kpi-icon limpeza">🧴</div>
+                  <div>
+                    <h4>Cobertura de limpeza</h4>
+                    <p className="kpi-valor">{`${inventarioResumo.limpeza.coberturaMedia || 0} dias`}</p>
+                    <span>{inventarioResumo.limpeza.itensCriticos} itens críticos</span>
+                  </div>
+                </article>
 
-            <article className="kpi-card">
-              <div className="kpi-icon saude">💊</div>
-              <div>
-                <h4>Adesão à Medicação</h4>
-                <p className="kpi-valor">{formatarPercentual(painel.resumo?.taxaMedicacao)}</p>
-                <span>{formatarNumero(painel.resumo?.incidentesClinicos)} incidentes clínicos</span>
-              </div>
-            </article>
+                <article className="kpi-card">
+                  <div className="kpi-icon alerta">🚨</div>
+                  <div>
+                    <h4>Alertas abertos</h4>
+                    <p className="kpi-valor">{alertasAtivos}</p>
+                    <span>Priorize itens com nível crítico</span>
+                  </div>
+                </article>
 
-            <article className="kpi-card">
-              <div className="kpi-icon bem-estar">💚</div>
-              <div>
-                <h4>Bem-estar médio</h4>
-                <p className="kpi-valor">{Number(painel.resumo?.bemEstarMedio || 0).toFixed(1)}</p>
-                <span>{formatarPercentual(painel.resumo?.taxaObito)} taxa de óbito</span>
-              </div>
-            </article>
-          </section>
+                <article className="kpi-card">
+                  <div className="kpi-icon planilhas">📥</div>
+                  <div>
+                    <h4>Planilhas importadas</h4>
+                    <p className="kpi-valor">{planilhasRecentes}</p>
+                    <span>Último envio: {ultimaPlanilha?.enviadoPor || 'Equipe'}</span>
+                  </div>
+                </article>
+              </section>
 
-          <section className="cards-secundarios">
-            <div className="card pequeno">
-              <h3>📅 Próxima consulta médica</h3>
-              <p>{painel.resumo?.proximaConsulta ? format(parseISO(painel.resumo.proximaConsulta), 'dd/MM/yyyy') : 'Sem registro'}</p>
-            </div>
-            <div className="card pequeno">
-              <h3>🤝 Encontros familiares</h3>
-              <p>{formatarNumero(painel.resumo?.encontrosFamiliares)}</p>
-            </div>
-            <div className="card pequeno">
-              <h3>🩺 Atendimentos clínicos</h3>
-              <p>{formatarNumero(painel.resumo?.atendimentosClinicos)}</p>
-            </div>
-            <div className="card pequeno">
-              <h3>🚑 Internações no período</h3>
-              <p>{formatarNumero(painel.resumo?.internacoesPeriodo)}</p>
-            </div>
-          </section>
+              <section className="cards-secundarios">
+                <div className="card pequeno">
+                  <h3>🗓️ Tarefas próximas (48h)</h3>
+                  <p>{tarefas48h}</p>
+                </div>
+                <div className="card pequeno">
+                  <h3>🧽 Categoria crítica (limpeza)</h3>
+                  <p>{categoriaCriticaLimpeza || 'Tudo em ordem'}</p>
+                </div>
+                <div className="card pequeno">
+                  <h3>🥗 Categoria crítica (dispensa)</h3>
+                  <p>{categoriaCriticaAlimentos || 'Tudo em ordem'}</p>
+                </div>
+                <div className="card pequeno">
+                  <h3>📦 Próximos vencimentos</h3>
+                  <p>{itensCriticosTotal > 0 ? 'Revise itens abaixo do mínimo' : 'Nenhum item crítico'}</p>
+                </div>
+              </section>
+            </>
+          ) : (
+            <>
+              {mostrarKPIs && (
+                <section className="kpis">
+                  <article className="kpi-card">
+                    <div className="kpi-icon residentes">👵</div>
+                    <div>
+                      <h4>Residentes Ativos</h4>
+                      <p className="kpi-valor">{formatarNumero(painel.resumo?.residentesAtivos)}</p>
+                      <span>{formatarNumero(painel.resumo?.residentesObservacao)} em observação</span>
+                    </div>
+                  </article>
+
+                  <article className="kpi-card">
+                    <div className="kpi-icon ocupacao">🏥</div>
+                    <div>
+                      <h4>Taxa de Ocupação</h4>
+                      <p className="kpi-valor">{formatarPercentual(painel.resumo?.taxaOcupacao)}</p>
+                      <span>{formatarNumero(painel.resumo?.residentesInternados)} residentes internados</span>
+                    </div>
+                  </article>
+
+                  <article className="kpi-card">
+                    <div className="kpi-icon saude">💊</div>
+                    <div>
+                      <h4>Adesão à Medicação</h4>
+                      <p className="kpi-valor">{formatarPercentual(painel.resumo?.taxaMedicacao)}</p>
+                      <span>{formatarNumero(painel.resumo?.incidentesClinicos)} incidentes clínicos</span>
+                    </div>
+                  </article>
+
+                  <article className="kpi-card">
+                    <div className="kpi-icon bem-estar">💚</div>
+                    <div>
+                      <h4>Bem-estar médio</h4>
+                      <p className="kpi-valor">{Number(painel.resumo?.bemEstarMedio || 0).toFixed(1)}</p>
+                      <span>{formatarPercentual(painel.resumo?.taxaObito)} taxa de óbito</span>
+                    </div>
+                  </article>
+                </section>
+              )}
+
+              <section className="cards-secundarios">
+                <div className="card pequeno">
+                  <h3>📅 Próxima consulta médica</h3>
+                  <p>{painel.resumo?.proximaConsulta ? format(parseISO(painel.resumo.proximaConsulta), 'dd/MM/yyyy') : 'Sem registro'}</p>
+                </div>
+                <div className="card pequeno">
+                  <h3>🤝 Encontros familiares</h3>
+                  <p>{formatarNumero(painel.resumo?.encontrosFamiliares)}</p>
+                </div>
+                <div className="card pequeno">
+                  <h3>🩺 Atendimentos clínicos</h3>
+                  <p>{formatarNumero(painel.resumo?.atendimentosClinicos)}</p>
+                </div>
+                <div className="card pequeno">
+                  <h3>🚑 Internações no período</h3>
+                  <p>{formatarNumero(painel.resumo?.internacoesPeriodo)}</p>
+                </div>
+              </section>
+            </>
+          )}
 
           <section className="graficos-grid">
-            <div className="grafico-card">
-              <div className="grafico-header">
-                <h3>🩺 Tendências de Saúde Diária</h3>
-                <span>Pressão, batimentos e glicemia</span>
+            {mostrarSaude && (
+              <div className="grafico-card">
+                <div className="grafico-header">
+                  <h3>🩺 Tendências de Saúde Diária</h3>
+                  <span>Pressão, batimentos e glicemia</span>
+                </div>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={saudeDiaria} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="data" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#bee3f8' }} />
+                    <Legend />
+                    <Line type="monotone" dataKey="pressao_sistolica" name="Pressão Sistólica" stroke="#4257b2" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="pressao_diastolica" name="Pressão Diastólica" stroke="#5ca4a9" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="frequencia_cardiaca" name="Frequência Cardíaca" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="glicemia" name="Glicemia" stroke="#ec4899" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={saudeDiaria} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="data" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#bee3f8' }} />
-                  <Legend />
-                  <Line type="monotone" dataKey="pressao_sistolica" name="Pressão Sistólica" stroke="#4257b2" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="pressao_diastolica" name="Pressão Diastólica" stroke="#5ca4a9" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="frequencia_cardiaca" name="Frequência Cardíaca" stroke="#f59e0b" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="glicemia" name="Glicemia" stroke="#ec4899" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            )}
 
-            <div className="grafico-card">
-              <div className="grafico-header">
-                <h3>📉 Óbitos e Internações por mês</h3>
-                <span>Panorama dos últimos 12 meses</span>
+            {mostrarSaude && (
+              <div className="grafico-card">
+                <div className="grafico-header">
+                  <h3>📉 Óbitos e Internações por mês</h3>
+                  <span>Panorama dos últimos 12 meses</span>
+                </div>
+                <ResponsiveContainer width="100%" height={300}>
+                  <AreaChart data={obitosMensal} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+                    <defs>
+                      <linearGradient id="colorObitos" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.7} />
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="colorInternacoes" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.7} />
+                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#fcd34d' }} />
+                    <Area type="monotone" dataKey="total_obitos" name="Óbitos" stroke="#ef4444" fill="url(#colorObitos)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="total_internacoes" name="Internações" stroke="#6366f1" fill="url(#colorInternacoes)" strokeWidth={2} />
+                    <Legend />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={obitosMensal} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-                  <defs>
-                    <linearGradient id="colorObitos" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.7} />
-                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="colorInternacoes" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.7} />
-                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="mes" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#fcd34d' }} />
-                  <Area type="monotone" dataKey="total_obitos" name="Óbitos" stroke="#ef4444" fill="url(#colorObitos)" strokeWidth={2} />
-                  <Area type="monotone" dataKey="total_internacoes" name="Internações" stroke="#6366f1" fill="url(#colorInternacoes)" strokeWidth={2} />
-                  <Legend />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            )}
 
-            <div className="grafico-card">
-              <div className="grafico-header">
-                <h3>📈 Ocupação Semanal</h3>
-                <span>Monitoramento das últimas 12 semanas</span>
+            {mostrarSaude && (
+              <div className="grafico-card">
+                <div className="grafico-header">
+                  <h3>📈 Ocupação Semanal</h3>
+                  <span>Monitoramento das últimas 12 semanas</span>
+                </div>
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={ocupacaoSemanal} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="semana" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#cbd5f5' }} />
+                    <Legend />
+                    <Line type="monotone" dataKey="taxa_ocupacao" name="Ocupação (%)" stroke="#0ea5e9" strokeWidth={2} dot />
+                    <Line type="monotone" dataKey="taxa_obito" name="Óbito (%)" stroke="#ef4444" strokeWidth={2} dot />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
-              <ResponsiveContainer width="100%" height={260}>
-                <LineChart data={ocupacaoSemanal} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="semana" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#cbd5f5' }} />
-                  <Legend />
-                  <Line type="monotone" dataKey="taxa_ocupacao" name="Ocupação (%)" stroke="#0ea5e9" strokeWidth={2} dot />
-                  <Line type="monotone" dataKey="taxa_obito" name="Óbito (%)" stroke="#ef4444" strokeWidth={2} dot />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            )}
 
-            <div className="grafico-card">
-              <div className="grafico-header">
-                <h3>💊 Adesão à medicação por ala</h3>
-                <span>Média do período selecionado</span>
+            {mostrarMedicacao && (
+              <div className="grafico-card">
+                <div className="grafico-header">
+                  <h3>💊 Adesão à medicação por ala</h3>
+                  <span>Média do período selecionado</span>
+                </div>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={medicacaoPorAla} layout="vertical" margin={{ top: 10, right: 20, bottom: 10, left: 40 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis type="number" tickFormatter={(value) => `${value}%`} domain={[0, 100]} />
+                    <YAxis type="category" dataKey="ala" />
+                    <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#6ee7b7' }} formatter={(value) => `${value}%`} />
+                    <Bar dataKey="taxa_aderencia" name="Adesão" fill="#22c55e" radius={[0, 8, 8, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={medicacaoPorAla} layout="vertical" margin={{ top: 10, right: 20, bottom: 10, left: 40 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis type="number" tickFormatter={(value) => `${value}%`} domain={[0, 100]} />
-                  <YAxis type="category" dataKey="ala" />
-                  <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#6ee7b7' }} formatter={(value) => `${value}%`} />
-                  <Bar dataKey="taxa_aderencia" name="Adesão" fill="#22c55e" radius={[0, 8, 8, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            )}
 
-            <div className="grafico-card">
-              <div className="grafico-header">
-                <h3>🥗 Cobertura de Estoques</h3>
-                <span>Dias de autonomia por categoria</span>
+            {mostrarEstoque && (
+              <div className="grafico-card">
+                <div className="grafico-header">
+                  <h3>🥗 Cobertura de Estoques</h3>
+                  <span>Dias de autonomia por categoria</span>
+                </div>
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={inventarioCobertura} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="categoria" tick={{ fontSize: 12 }} interval={0} angle={-20} textAnchor="end" height={70} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#fde68a' }} formatter={(value) => `${value} dias`} />
+                    <Legend />
+                    <Bar dataKey="cobertura" name="Dias de cobertura" fill="#f59e0b" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-              <ResponsiveContainer width="100%" height={260}>
-                <BarChart data={inventarioCobertura} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="categoria" tick={{ fontSize: 12 }} interval={0} angle={-20} textAnchor="end" height={70} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#fde68a' }} formatter={(value) => `${value} dias`} />
-                  <Legend />
-                  <Bar dataKey="cobertura" name="Dias de cobertura" fill="#f59e0b" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            )}
 
             <div className="grafico-card alertas">
               <div className="grafico-header">
@@ -411,26 +546,28 @@ function Dashboard() {
               </ul>
             </div>
 
-            <div className="card planilhas">
-              <h3>📎 Planilhas anexadas recentemente</h3>
-              <ul>
-                {painel.planilhas && painel.planilhas.length > 0 ? (
-                  painel.planilhas.map((planilha) => (
-                    <li key={planilha.id}>
-                      <div>
-                        <strong>{planilha.nome}</strong>
-                        <span>{planilha.enviadoPor || 'Equipe'}</span>
-                      </div>
-                      <a href={`/${planilha.caminho}`} target="_blank" rel="noreferrer">
-                        Abrir
-                      </a>
-                    </li>
-                  ))
-                ) : (
-                  <li className="planilha-vazia">Nenhuma planilha enviada ainda.</li>
-                )}
-              </ul>
-            </div>
+            {mostrarPlanilhas && (
+              <div className="card planilhas">
+                <h3>📎 Planilhas anexadas recentemente</h3>
+                <ul>
+                  {painel.planilhas && painel.planilhas.length > 0 ? (
+                    painel.planilhas.map((planilha) => (
+                      <li key={planilha.id}>
+                        <div>
+                          <strong>{planilha.nome}</strong>
+                          <span>{planilha.enviadoPor || 'Equipe'}</span>
+                        </div>
+                        <a href={`/${planilha.caminho}`} target="_blank" rel="noreferrer">
+                          Abrir
+                        </a>
+                      </li>
+                    ))
+                  ) : (
+                    <li className="planilha-vazia">Nenhuma planilha enviada ainda.</li>
+                  )}
+                </ul>
+              </div>
+            )}
           </section>
         </>
       )}

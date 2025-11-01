@@ -210,6 +210,22 @@
   color: #f97316;
 }
 
+.kpi-icon.estoque {
+  color: #f59e0b;
+}
+
+.kpi-icon.limpeza {
+  color: #5ca4a9;
+}
+
+.kpi-icon.alerta {
+  color: #ef4444;
+}
+
+.kpi-icon.planilhas {
+  color: #6366f1;
+}
+
 .kpi-card h4 {
   font-size: 14px;
   text-transform: uppercase;

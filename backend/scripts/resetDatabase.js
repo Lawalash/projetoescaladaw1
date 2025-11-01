@@ -1,6 +1,7 @@
 const path = require('path');
 const dotenv = require('dotenv');
 const mysql = require('mysql2/promise');
+const { hashPassword } = require('../src/utils/security');
 
 // Tentar carregar variáveis de ambiente do backend e do projeto raiz
 const backendEnvPath = path.resolve(__dirname, '../.env');
@@ -16,6 +17,7 @@ const {
 } = process.env;
 
 const TABLES = [
+  'usuarios',
   'logs_envio',
   'config_envio',
   'config_sistema',
@@ -43,6 +45,15 @@ function diasAtras(base, dias) {
 
 async function criarEstrutura(connection) {
   const ddlStatements = [
+    `CREATE TABLE usuarios (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      nome VARCHAR(120) NOT NULL,
+      email VARCHAR(160) NOT NULL UNIQUE,
+      senha_hash VARCHAR(255) NOT NULL,
+      role ENUM('patrao','asg','enfermaria') NOT NULL DEFAULT 'asg',
+      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+      atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
     `CREATE TABLE residentes (
       id INT AUTO_INCREMENT PRIMARY KEY,
       nome VARCHAR(120) NOT NULL,
@@ -399,6 +410,20 @@ async function popularDados(connection) {
       `INSERT INTO estoque_planilhas (nome_original, caminho_arquivo, enviado_por, total_registros, criado_em)
        VALUES (?, ?, ?, ?, DATE_SUB(NOW(), INTERVAL ? DAY))`,
       [planilha.nome, planilha.caminho, planilha.enviadoPor, planilha.total, planilha.dias]
+    );
+  }
+
+  const usuarios = [
+    { nome: 'Direção Aurora', email: 'direcao@auroracare.com', senha: 'patroes123', role: 'patrao' },
+    { nome: 'Time de Limpeza', email: 'asg@auroracare.com', senha: 'limpeza123', role: 'asg' },
+    { nome: 'Coordenação Enfermagem', email: 'enfermaria@auroracare.com', senha: 'enfermaria123', role: 'enfermaria' }
+  ];
+
+  for (const usuario of usuarios) {
+    await connection.execute(
+      `INSERT INTO usuarios (nome, email, senha_hash, role, criado_em)
+       VALUES (?, ?, ?, ?, NOW())`,
+      [usuario.nome, usuario.email, hashPassword(usuario.senha), usuario.role]
     );
   }
 
