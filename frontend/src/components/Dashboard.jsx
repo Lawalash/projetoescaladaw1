@@ -960,6 +960,11 @@ function Dashboard({
                         <span>{formatarDataHora(registro.registradoEm)}</span>
                         <span className={`tag-ponto tag-ponto--${registro.tipo}`}>{registro.tipo}</span>
                       </div>
+                      {registro.usuarioNome && (
+                        <span className="ponto-item__registrado-por">
+                          Registrado por {registro.usuarioNome}
+                        </span>
+                      )}
                       {registro.observacao && <p>{registro.observacao}</p>}
                     </li>
                   ))}

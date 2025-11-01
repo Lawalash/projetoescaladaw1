@@ -272,10 +272,18 @@ async function listarPontos({ role, membroId, limite = 30 }) {
   const limiteSeguro = Math.max(5, Math.min(Number.parseInt(limite, 10) || 30, 200));
 
   const registros = await query(
-    `SELECT pr.id, pr.membro_id AS membroId, em.nome AS membroNome, em.role,
-            pr.tipo, pr.observacao, pr.registrado_em AS registradoEm
+    `SELECT pr.id,
+            pr.membro_id AS membroId,
+            em.nome AS membroNome,
+            em.role,
+            pr.usuario_id AS usuarioId,
+            u.nome AS usuarioNome,
+            pr.tipo,
+            pr.observacao,
+            pr.registrado_em AS registradoEm
      FROM pontos_registros pr
      LEFT JOIN equipe_membros em ON em.id = pr.membro_id
+     LEFT JOIN usuarios u ON u.id = pr.usuario_id
      ${where}
      ORDER BY pr.registrado_em DESC
      LIMIT ${limiteSeguro}`,

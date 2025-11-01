@@ -839,6 +839,11 @@
   color: #6b7a99;
 }
 
+.ponto-item__registrado-por {
+  font-size: 11px;
+  color: #8a9ab8;
+}
+
 .tag-ponto {
   padding: 4px 10px;
   border-radius: 999px;
