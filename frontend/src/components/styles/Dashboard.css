@@ -399,6 +399,219 @@
   margin-bottom: 4px;
 }
 
+.estoque-detalhado {
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 24px;
+  padding: 28px;
+  box-shadow: 0 18px 40px rgba(41, 72, 152, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.estoque-detalhado__header {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.estoque-detalhado__header h3 {
+  font-size: 20px;
+  color: #1f2d3d;
+  margin-bottom: 4px;
+}
+
+.estoque-detalhado__header p {
+  font-size: 14px;
+  color: #5c6c80;
+  max-width: 520px;
+}
+
+.estoque-detalhado__resumo {
+  align-self: center;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.08);
+  color: #312e81;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.estoque-detalhado__tabs {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.estoque-detalhado__tab {
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(248, 250, 252, 0.9);
+  color: #475569;
+  padding: 10px 18px;
+  border-radius: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.estoque-detalhado__tab:hover {
+  border-color: rgba(99, 102, 241, 0.5);
+  color: #312e81;
+}
+
+.estoque-detalhado__tab.ativo {
+  background: linear-gradient(135deg, #6366f1 0%, #14b8a6 100%);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 12px 24px rgba(99, 102, 241, 0.25);
+}
+
+.estoque-detalhado__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+.estoque-detalhado__card {
+  background: rgba(248, 250, 252, 0.9);
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.estoque-detalhado__card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 28px rgba(71, 85, 105, 0.18);
+}
+
+.estoque-detalhado__card.critico {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(254, 226, 226, 0.6);
+}
+
+.estoque-detalhado__card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.estoque-detalhado__card-header h4 {
+  font-size: 16px;
+  color: #1f2d3d;
+  margin-bottom: 4px;
+}
+
+.estoque-detalhado__card-header span {
+  font-size: 13px;
+  color: #475569;
+}
+
+.estoque-detalhado__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(248, 113, 113, 0.18);
+  color: #b91c1c;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.estoque-detalhado__lista {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  list-style: none;
+}
+
+.estoque-item {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 16px;
+  border: 1px solid rgba(203, 213, 225, 0.6);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.estoque-item.critico {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(254, 226, 226, 0.8);
+}
+
+.estoque-item__titulo {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  color: #1f2d3d;
+}
+
+.estoque-item__titulo span {
+  font-weight: 600;
+  color: #312e81;
+}
+
+.estoque-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.estoque-item__extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.estoque-item__obs {
+  font-size: 12px;
+  color: #334155;
+  line-height: 1.4;
+}
+
+.estoque-detalhado__vazio {
+  border: 1px dashed rgba(148, 163, 184, 0.5);
+  border-radius: 18px;
+  padding: 32px 24px;
+  text-align: center;
+  background: rgba(248, 250, 252, 0.7);
+  color: #475569;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+}
+
+.estoque-detalhado__alternar {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-weight: 600;
+  cursor: pointer;
+  background: linear-gradient(135deg, #14b8a6 0%, #6366f1 100%);
+  color: white;
+  box-shadow: 0 12px 24px rgba(20, 184, 166, 0.25);
+}
+
+.estoque-detalhado__alternar:hover {
+  transform: translateY(-2px);
+}
+
 .cronograma-info span {
   font-size: 12px;
   color: #334155;
