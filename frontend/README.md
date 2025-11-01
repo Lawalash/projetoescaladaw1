@@ -1,341 +1,193 @@
-# QW1 — Automação de Relatórios (CSV → Dashboard Web)
+# AuroraCare — Monitoramento de Lar de Idosos
 
 ## 📋 Visão Geral
 
-Sistema completo de automação de relatórios para PMEs, com upload de CSV/Excel, dashboard web interativo, exportação de dados e notificações automáticas por e-mail e WhatsApp.
+AuroraCare é uma plataforma full-stack pensada para casas de repouso. O projeto combina dashboard em tempo real, ingestão de planilhas de estoque, monitoramento de indicadores de saúde e disparo automatizado de comunicados para familiares e equipe médica.
 
-**Stack:**
-- **Front-end:** React + Recharts
-- **Back-end:** Node.js (Express) + Python (pandas)
-- **Banco:** MySQL local (via Workbench)
-- **Notificações:** Nodemailer (e-mail) + Vonage/Twilio (WhatsApp)
-- **Agendamento:** node-cron + PM2
+**Principais áreas monitoradas:**
+
+- Ocupação do lar e idade média dos residentes
+- Indicadores clínicos diários (pressão, frequência cardíaca, glicemia, quedas, internações)
+- Aderência aos medicamentos por ala
+- Cobertura dos estoques de alimentos e produtos de limpeza
+- Cronograma de atividades, consultas e encontros familiares
+- Alertas críticos (baixa cobertura de estoque, eventos clínicos)
 
 ---
 
-## 🗂️ Estrutura do Projeto
+## 🧱 Arquitetura
 
 ```
-qw1-automacao-relatorios/
+auroracare/
 ├─ backend/
-│  ├─ package.json
-│  ├─ .env.example
 │  ├─ src/
-│  │  ├─ index.js
-│  │  ├─ routes/
-│  │  │  └─ vendas.js
-│  │  ├─ controllers/
-│  │  │  └─ vendasController.js
+│  │  ├─ index.js                 # API Express
+│  │  ├─ controllers/larController.js
+│  │  ├─ routes/lar.js
 │  │  ├─ services/
-│  │  │  ├─ etlService.js
+│  │  │  ├─ etlService.js         # Processamento de planilhas (CSV/XLSX)
 │  │  │  └─ notificationService.js
-│  │  └─ db/
-│  │     └─ connection.js
-│  ├─ scripts/
-│  │  └─ import_csv.js
-│  ├─ cron/
-│  │  └─ jobs.js
-│  └─ uploads/
-├─ etl/
-│  ├─ etl.py
-│  └─ requirements.txt
-├─ frontend/
-│  ├─ package.json
-│  └─ src/
-│     ├─ App.jsx
-│     ├─ services/
-│     │  └─ api.js
-│     └─ components/
-│        ├─ Dashboard.jsx
-│        ├─ ChartVendas.jsx
-│        ├─ TopProdutos.jsx
-│        ├─ ExportCSVButton.jsx
-│        └─ ConfigurarEnvio.jsx
-├─ sample_data/
-│  └─ dados_exemplo.csv
-├─ sql/
-│  └─ schema.sql
-├─ docker-compose.yml
-└─ README.md
+│  │  └─ db/connection.js         # Pool MySQL
+│  ├─ cron/jobs.js                # Resumo automático agendado
+│  └─ uploads/planilhas/          # Planilhas anexadas via dashboard
+├─ etl/etl.py                     # ETL em Python para estoques/saúde
+├─ frontend/src/
+│  ├─ App.jsx                     # Shell com abas “Painel” e “Comunicações”
+│  ├─ components/Dashboard.jsx
+│  ├─ components/ConfigurarEnvio.jsx
+│  └─ services/api.js             # Cliente Axios
+└─ sql/schema.sql                 # Script base de tabelas
 ```
 
 ---
 
-## ⚙️ Passo a Passo - Instalação Local
+## ⚙️ Pré-requisitos
 
-### 1️⃣ **Pré-requisitos**
+- Node.js 18+
+- Python 3.9+
+- MySQL 8+
+- npm e pip
 
-```bash
-# Node.js 18+
-node --version
+---
 
-# Python 3.9+
-python --version
+## 🛠️ Configuração Passo a Passo
 
-# MySQL 8.0+
-mysql --version
-
-# MySQL Workbench instalado
-```
-
-### 2️⃣ **Configurar Banco de Dados (MySQL Workbench)**
-
-1. Abra o **MySQL Workbench**
-2. Conecte-se à sua instância MySQL local (usuário `root` ou outro)
-3. Abra o arquivo `sql/schema.sql` no Workbench
-4. Execute o script (botão ⚡ ou Ctrl+Shift+Enter)
-
-**Ou via terminal:**
+### 1. Banco de Dados
 
 ```bash
 mysql -u root -p < sql/schema.sql
 ```
 
-**Verificar criação:**
+O script cria as tabelas base (`residentes`, `metricas_saude`, `metricas_medicacao`, `estoque_itens`, `estoque_alimentos`, `estoque_limpeza`, `config_envio`, etc).
 
-```sql
-USE qw1_relatorios;
-SHOW TABLES;
--- Deve mostrar: vendas, config_envio
-```
-
-### 3️⃣ **Configurar Backend (Node.js)**
+### 2. Backend (Node.js)
 
 ```bash
 cd backend
 npm install
-
-# Copiar arquivo de exemplo
 cp .env.example .env
-
-# Editar .env com suas credenciais
-nano .env  # ou use seu editor preferido
 ```
 
-**Exemplo `.env`:**
+Exemplo de `.env`:
 
 ```env
 PORT=8000
 DB_HOST=localhost
 DB_USER=root
-DB_PASSWORD=sua_senha_mysql
-DB_NAME=qw1_relatorios
+DB_PASSWORD=sua_senha
+DB_NAME=aurora_care
 
-# E-mail (use Gmail, Outlook, etc.)
+CORS_ORIGIN=http://localhost:5173
+
+# SMTP para e-mails
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
+SMTP_SECURE=false
 SMTP_USER=seuemail@gmail.com
-SMTP_PASS=sua_senha_app
+SMTP_PASS=senha_de_app
+EMAIL_FROM=seuemail@gmail.com
+EMAIL_FROM_NAME=AuroraCare
 
 # WhatsApp (Vonage)
-VONAGE_API_KEY=sua_api_key
-VONAGE_API_SECRET=seu_secret
+VONAGE_API_KEY=xxx
+VONAGE_API_SECRET=yyy
 WHATSAPP_FROM=5583999999999
 
-# Cron (padrão: a cada hora)
-CRON_EXPRESSION=0 * * * *
+# Agendamentos
+ENABLE_CRON=true
+CRON_EXPRESSION=0 9 * * *   # diariamente às 9h
 ```
 
-**Testar backend:**
+Inicie o servidor:
 
 ```bash
 npm run dev
-# Deve abrir em http://localhost:8000
+# http://localhost:8000/api/lar/painel
 ```
 
-### 4️⃣ **Configurar ETL (Python)**
+### 3. ETL (Python)
 
 ```bash
 cd etl
 pip install -r requirements.txt
 
-# Testar ETL com dados de exemplo
-python etl.py --file ../sample_data/dados_exemplo.csv
+# Importar planilha de estoque de alimentos
+python etl.py --file ../sample_data/estoque_alimentos.xlsx --tipo estoque_alimentos
+
+# Importar métricas de saúde
+python etl.py --file ../sample_data/saude_diaria.csv --tipo saude_diaria
 ```
 
-**Saída esperada:**
+O script normaliza colunas, converte datas/numéricos e grava diretamente no MySQL.
 
-```
-✅ ETL Concluído
-- Linhas processadas: 30
-- Linhas inseridas: 30
-- Erros: 0
-```
-
-**Verificar no MySQL:**
-
-```sql
-USE qw1_relatorios;
-SELECT COUNT(*) FROM vendas;
--- Deve retornar: 30
-```
-
-### 5️⃣ **Configurar Frontend (React)**
+### 4. Frontend (React + Vite)
 
 ```bash
 cd frontend
 npm install
-npm start
-# Abre automaticamente em http://localhost:3000
-```
-
-### 6️⃣ **Testar Sistema Completo**
-
-#### ✅ **Checklist de Aceitação**
-
-**Backend:**
-- [ ] `GET http://localhost:8000/api/vendas?start=2025-10-01&end=2025-10-15` retorna JSON
-- [ ] `GET http://localhost:8000/api/vendas/top-produtos?limit=5` retorna top 5 produtos
-- [ ] `POST http://localhost:8000/api/etl/run` executa ETL (precisa enviar path no body)
-
-**Frontend:**
-- [ ] Dashboard carrega sem erros
-- [ ] Gráfico de vendas por dia é exibido
-- [ ] Top produtos aparece corretamente
-- [ ] Botão "Exportar CSV" baixa arquivo
-- [ ] Filtros por data funcionam
-
-**ETL:**
-- [ ] Upload de novo CSV via interface funciona
-- [ ] Dados novos aparecem no dashboard
-
-**Notificações:**
-- [ ] Testar envio manual: `POST http://localhost:8000/api/notificacao/testar`
-- [ ] Receber e-mail de teste
-- [ ] Receber WhatsApp de teste (se configurado)
-
----
-
-## 🔄 Agendamento Automático (Cron)
-
-O sistema pode enviar relatórios automaticamente via e-mail/WhatsApp.
-
-### Configurar Frequência
-
-**Via Interface (Frontend):**
-1. Acesse "Configurações de Envio"
-2. Defina frequência (ex: a cada 1 hora, diariamente às 9h)
-3. Adicione e-mails e números de WhatsApp
-4. Salvar
-
-**Via Backend (arquivo .env):**
-
-```env
-# A cada hora
-CRON_EXPRESSION=0 * * * *
-
-# Diariamente às 9h
-CRON_EXPRESSION=0 9 * * *
-
-# A cada 30 minutos
-CRON_EXPRESSION=*/30 * * * *
-```
-
-### Iniciar Processo Cron (com PM2)
-
-```bash
-cd backend
-
-# Instalar PM2 globalmente (se não tiver)
-npm install -g pm2
-
-# Iniciar backend
-pm2 start src/index.js --name qw1-backend
-
-# Iniciar cron job
-pm2 start cron/jobs.js --name qw1-cron
-
-# Ver processos
-pm2 list
-
-# Ver logs
-pm2 logs qw1-cron
-```
-
-**Parar processos:**
-
-```bash
-pm2 stop qw1-backend
-pm2 stop qw1-cron
+npm run dev
+# http://localhost:5173
 ```
 
 ---
 
-## 📤 Exportar Dados
+## ✅ Checklist de Validação
 
-### Via Interface
+### API
+- `GET http://localhost:8000/api/lar/painel?start=2025-01-01&end=2025-01-30`
+- `POST http://localhost:8000/api/lar/inventario/upload` (multipart com arquivo + `tipo` + `responsavel`)
+- `POST http://localhost:8000/api/lar/notificacoes/testar` (JSON `{ tipo: 'email', destinatario: '...' }`)
 
-1. No dashboard, selecione período (data inicial e final)
-2. Clique em "Exportar CSV"
-3. Arquivo `relatorio_YYYY-MM-DD.csv` será baixado
+### Dashboard
+- KPIs exibem residentes, ocupação, adesão, óbitos
+- Gráficos mostram tendências de saúde, ocupação semanal, estoques e aderência por ala
+- Cronograma lista atividades dos próximos dias
+- Upload de planilhas atualiza cobertura de estoque
 
-### Via API
+### Comunicações
+- Cadastro de familiares/profissionais via aba “Comunicações”
+- Botão “Testar” envia resumo diário para o contato
+- Logs populam tabela `logs_envio`
 
-```bash
-curl "http://localhost:8000/api/export/csv?start=2025-10-01&end=2025-10-15" \
-  --output relatorio.csv
-```
-
----
-
-## 🚀 Deploy (Próximos Passos)
-
-### Opção 1: Docker (Local ou Servidor)
-
-```bash
-# Subir tudo com Docker Compose
-docker-compose up --build
-
-# Acessar:
-# Frontend: http://localhost:3000
-# Backend: http://localhost:8000
-# MySQL: localhost:3306
-```
-
-### Opção 2: Cloud (Produção)
-
-**Backend:** Render, Railway, Heroku
-**Frontend:** Vercel, Netlify
-**Banco:** AWS RDS, PlanetScale, Supabase
-
-**Passos resumidos:**
-1. Criar repositório Git
-2. Conectar Render ao repo (backend)
-3. Conectar Vercel ao repo (frontend)
-4. Criar banco MySQL na nuvem (RDS/PlanetScale)
-5. Atualizar variáveis de ambiente em cada serviço
+### Cron / Automatização
+- `ENABLE_CRON=true` agenda o envio diário
+- Mensagem gerada lista KPIs, ocupação semanal e alertas de estoque
 
 ---
 
-## 🔐 Segurança
+## 📎 Fluxo de Upload de Planilhas
 
-- ✅ **Nunca commitar** `.env` (já está no `.gitignore`)
-- ✅ **Validar uploads** (tamanho máximo, tipos permitidos)
-- ✅ **CORS configurado** apenas para origens permitidas
-- ✅ **Sanitização** de inputs em queries SQL
-- ✅ **Rate limiting** em endpoints sensíveis (produção)
+1. Selecione o tipo de estoque (alimentos ou limpeza) no dashboard
+2. Informe o responsável pelo envio
+3. Faça upload do arquivo CSV/XLSX com colunas:
+   - `Categoria`, `Item`, `Quantidade`, `Unidade`, `Consumo_Diario`, `Validade`, `Lote`, `Fornecedor`
+4. O backend grava os itens em `estoque_itens` e registra o arquivo em `estoque_planilhas`
 
----
-
-## 📈 Melhorias Futuras (Pós-MVP)
-
-1. **Autenticação:** Login com JWT, OAuth
-2. **Multi-tenant:** Cada cliente tem seus dados isolados (SaaS)
-3. **Billing:** Integração com Stripe/PagSeguro
-4. **Dashboards personalizados:** Usuário cria seus próprios gráficos
-5. **BI Avançado:** Previsões com ML (Python scikit-learn)
-6. **Mobile:** App React Native ou PWA
+Para métricas de saúde, utilize o ETL Python com colunas:
+`data_ref`, `pressao_sistolica`, `pressao_diastolica`, `frequencia_cardiaca`, `glicemia`, `incidentes_quedas`, `internacoes`, `pontuacao_bem_estar`, `taxa_ocupacao`, `taxa_obito`.
 
 ---
 
-## 📞 Suporte
+## 📬 Notificações Automáticas
 
-**Dev-CEO:** [Seu Nome]  
-**Local:** Campina Grande, PB  
-**Contato:** [seu@email.com] | [(83) 9999-9999]
+- Relatórios diários via e-mail/WhatsApp com resumo clínico e coberturas de estoque
+- Template HTML em `notificationService.js`
+- Mensagens de WhatsApp usam Vonage
+- Contatos cadastrados ficam em `config_envio`
 
 ---
 
-## 📄 Licença
+## 🧪 Dados de Demonstração
 
-Proprietário - QW1 © 2025
+- Pastas `sample_data/` (estoques e saúde) podem ser importadas via ETL Python
+- Utilize `npm run dev` + `npm run cron` (se configurado) para simular o ciclo completo
+
+---
+
+## 📮 Suporte
+
+- Ajuste queries do controlador (`larController.js`) de acordo com sua modelagem real
+- Configure variáveis de ambiente de e-mail/WhatsApp antes de acionar notificações
+- Para produção, recomenda-se PM2 + SSL + backups automáticos do MySQL
+
+Boas análises! 🏡💙

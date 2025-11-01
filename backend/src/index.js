@@ -1,13 +1,15 @@
-// QW1 Backend - Servidor Principal
+// AuroraCare Backend - Servidor Principal
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const fs = require('fs');
+const path = require('path');
 
 // Rotas
-const vendasRoutes = require('./routes/vendas');
+const larRoutes = require('./routes/lar');
 
 // Inicializar app
 const app = express();
@@ -39,8 +41,17 @@ app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Garantir pastas de upload
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+const planilhasDir = path.join(uploadsDir, 'planilhas');
+[uploadsDir, planilhasDir].forEach((dir) => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
+
 // Pasta de uploads
-app.use('/uploads', express.static('uploads'));
+app.use('/uploads', express.static(uploadsDir));
 
 // Health check
 app.get('/health', (req, res) => {
@@ -53,22 +64,19 @@ app.get('/health', (req, res) => {
 });
 
 // Rotas da API
-app.use('/api/vendas', vendasRoutes);
+app.use('/api/lar', larRoutes);
 
 // Rota de teste
 app.get('/', (req, res) => {
   res.json({
-    name: 'QW1 API - Automação de Relatórios',
+    name: 'AuroraCare API - Monitoramento do Lar',
     version: '1.0.0',
     endpoints: {
       health: '/health',
-      vendas: '/api/vendas',
-      topProdutos: '/api/vendas/top-produtos',
-      snapshot: '/api/relatorio/snapshot',
-      export: '/api/export/csv',
-      etl: '/api/etl/run',
-      upload: '/api/upload-csv',
-      notificacoes: '/api/notificacao/testar'
+      painel: '/api/lar/painel',
+      inventario: '/api/lar/inventario/upload',
+      notificacoes: '/api/lar/notificacoes/testar',
+      configNotificacoes: '/api/lar/config/notificacoes'
     }
   });
 });
@@ -98,7 +106,7 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`
 ╔════════════════════════════════════════╗
-║   QW1 Backend API                      ║
+║   AuroraCare Backend API               ║
 ║   Porta: ${PORT}                         ║
 ║   Ambiente: ${process.env.NODE_ENV || 'development'}              ║
 ║   CORS: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}   ║

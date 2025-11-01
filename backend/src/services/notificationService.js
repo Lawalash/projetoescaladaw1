@@ -26,7 +26,7 @@ exports.enviarEmail = async (destinatario, assunto, htmlContent) => {
     const transporter = criarTransportadorEmail();
     
     const info = await transporter.sendMail({
-      from: `"${process.env.EMAIL_FROM_NAME || 'QW1 Relatórios'}" <${process.env.EMAIL_FROM}>`,
+      from: `"${process.env.EMAIL_FROM_NAME || 'AuroraCare'}" <${process.env.EMAIL_FROM}>`,
       to: destinatario,
       subject: assunto,
       html: htmlContent
@@ -139,68 +139,84 @@ exports.enviarWhatsAppTwilio = async (numeroDestinatario, mensagem) => {
  * Gerar HTML do relatório para e-mail
  */
 exports.gerarHTMLRelatorio = (dados) => {
-  const { kpis, topProdutos, periodo } = dados;
-  
+  const {
+    periodo,
+    residentesAtivos,
+    taxaOcupacao,
+    taxaMedicacao,
+    obitosPeriodo,
+    internacoesPeriodo,
+    ocupacaoSemanal = [],
+    adesaoAla = [],
+    estoqueCritico = {}
+  } = dados;
+
+  const listaOcupacao = ocupacaoSemanal
+    .map((item) => `<li><strong>${item.semana}</strong>: ${item.taxa_ocupacao || 0}%</li>`)
+    .join('');
+
+  const listaAderencia = adesaoAla
+    .map((item) => `<li>${item.ala}: ${item.taxa || 0}%</li>`)
+    .join('');
+
+  const listaEstoque = [
+    ...(estoqueCritico.alimentos || []).map(
+      (item) => `<li>🍎 ${item.categoria}: ${item.dias || 0} dias</li>`
+    ),
+    ...(estoqueCritico.limpeza || []).map(
+      (item) => `<li>🧼 ${item.categoria}: ${item.dias || 0} dias</li>`
+    )
+  ].join('');
+
   return `
     <!DOCTYPE html>
-    <html>
-    <head>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
-        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; }
-        h1 { color: #333; border-bottom: 3px solid #4CAF50; padding-bottom: 10px; }
-        .kpi { background: #f0f0f0; padding: 15px; margin: 10px 0; border-radius: 5px; }
-        .kpi-label { font-size: 14px; color: #666; }
-        .kpi-value { font-size: 24px; font-weight: bold; color: #4CAF50; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th { background: #4CAF50; color: white; padding: 10px; text-align: left; }
-        td { padding: 10px; border-bottom: 1px solid #ddd; }
-        .footer { margin-top: 30px; font-size: 12px; color: #999; text-align: center; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <h1>📊 Relatório QW1 - ${periodo || 'Período Atual'}</h1>
-        
-        <div class="kpi">
-          <div class="kpi-label">Total de Vendas</div>
-          <div class="kpi-value">${kpis.total_vendas || 0}</div>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8" />
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f7fb; margin: 0; padding: 32px; }
+          .wrapper { max-width: 640px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(66, 87, 178, 0.15); }
+          .header { background: linear-gradient(135deg, #5ca4a9 0%, #4257b2 100%); color: #fff; padding: 28px; }
+          .header h1 { margin: 0 0 4px 0; font-size: 24px; }
+          .header p { margin: 0; font-size: 14px; opacity: 0.9; }
+          .content { padding: 28px; color: #1f2d3d; }
+          .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+          .kpi { background: #f8fafc; border-radius: 14px; padding: 16px; border: 1px solid rgba(66, 87, 178, 0.12); }
+          .kpi span { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: #64748b; margin-bottom: 6px; }
+          .kpi strong { font-size: 22px; color: #1f2d3d; }
+          h2 { font-size: 16px; text-transform: uppercase; letter-spacing: 0.6px; color: #4257b2; margin-top: 24px; margin-bottom: 12px; }
+          ul { padding-left: 18px; margin: 0 0 16px 0; color: #475569; }
+          .footer { background: #f8fafc; padding: 20px 28px; font-size: 12px; color: #64748b; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="wrapper">
+          <div class="header">
+            <h1>Relatório AuroraCare</h1>
+            <p>${periodo || 'Período atual'} · ${new Date().toLocaleDateString('pt-BR')}</p>
+          </div>
+          <div class="content">
+            <div class="kpi-grid">
+              <div class="kpi"><span>Residentes ativos</span><strong>${residentesAtivos || 0}</strong></div>
+              <div class="kpi"><span>Taxa de ocupação</span><strong>${taxaOcupacao}%</strong></div>
+              <div class="kpi"><span>Adesão à medicação</span><strong>${taxaMedicacao}%</strong></div>
+              <div class="kpi"><span>Óbitos no período</span><strong>${obitosPeriodo || 0}</strong></div>
+            </div>
+
+            <h2>Variação semanal de ocupação</h2>
+            <ul>${listaOcupacao || '<li>Sem dados registrados</li>'}</ul>
+
+            <h2>Aderência por ala</h2>
+            <ul>${listaAderencia || '<li>Sem dados registrados</li>'}</ul>
+
+            <h2>Alertas de cobertura de estoque</h2>
+            <ul>${listaEstoque || '<li>Nenhum item crítico detectado</li>'}</ul>
+          </div>
+          <div class="footer">
+            AuroraCare · Tecnologia para cuidado humanizado · ${new Date().toLocaleString('pt-BR')}
+          </div>
         </div>
-        
-        <div class="kpi">
-          <div class="kpi-label">Receita Total</div>
-          <div class="kpi-value">R$ ${parseFloat(kpis.receita_total || 0).toFixed(2)}</div>
-        </div>
-        
-        <div class="kpi">
-          <div class="kpi-label">Ticket Médio</div>
-          <div class="kpi-value">R$ ${parseFloat(kpis.ticket_medio || 0).toFixed(2)}</div>
-        </div>
-        
-        <h2 style="margin-top: 30px;">🏆 Top 5 Produtos</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Produto</th>
-              <th>Receita</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${topProdutos.map(p => `
-              <tr>
-                <td>${p.produto}</td>
-                <td>R$ ${parseFloat(p.receita || 0).toFixed(2)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        
-        <div class="footer">
-          <p>Relatório gerado automaticamente por QW1 - Automação de Relatórios</p>
-          <p>Data: ${new Date().toLocaleString('pt-BR')}</p>
-        </div>
-      </div>
-    </body>
+      </body>
     </html>
   `;
 };
@@ -228,25 +244,31 @@ exports.enviarRelatorioAutomatico = async (dadosRelatorio) => {
           const html = exports.gerarHTMLRelatorio(dadosRelatorio);
           await exports.enviarEmail(
             dest.destinatario,
-            'Relatório Automático QW1',
+            'AuroraCare · Atualização automatizada',
             html
           );
           resultados.push({ tipo: 'email', destinatario: dest.destinatario, status: 'enviado' });
         } else if (dest.tipo_envio === 'whatsapp') {
           const mensagem = `
-📊 *Relatório QW1*
+📊 *AuroraCare - Resumo do lar*
 
 *Período:* ${dadosRelatorio.periodo}
-*Total de Vendas:* ${dadosRelatorio.kpis.total_vendas}
-*Receita Total:* R$ ${parseFloat(dadosRelatorio.kpis.receita_total || 0).toFixed(2)}
-*Ticket Médio:* R$ ${parseFloat(dadosRelatorio.kpis.ticket_medio || 0).toFixed(2)}
+*Residentes ativos:* ${dadosRelatorio.residentesAtivos}
+*Ocupação:* ${dadosRelatorio.taxaOcupacao}%
+*Adesão à medicação:* ${dadosRelatorio.taxaMedicacao}%
+*Óbitos / Internações:* ${dadosRelatorio.obitosPeriodo} / ${dadosRelatorio.internacoesPeriodo}
 
-*Top 3 Produtos:*
-${dadosRelatorio.topProdutos.slice(0, 3).map((p, i) => 
-  `${i + 1}. ${p.produto} - R$ ${parseFloat(p.receita).toFixed(2)}`
-).join('\n')}
+*Ocupação semanal:*
+${(dadosRelatorio.ocupacaoSemanal || [])
+  .map((item) => `• ${item.semana}: ${item.taxa_ocupacao || 0}%`)
+  .join('\n')}
 
-_Gerado em ${new Date().toLocaleString('pt-BR')}_
+*Estoques críticos:*
+${[...(dadosRelatorio.estoqueCritico?.alimentos || []), ...(dadosRelatorio.estoqueCritico?.limpeza || [])]
+  .map((item) => `• ${item.categoria}: ${item.dias || 0} dias`)
+  .join('\n') || '• Cobertura regular'}
+
+_Gerado automaticamente em ${new Date().toLocaleString('pt-BR')}_
           `.trim();
           
           await exports.enviarWhatsApp(dest.destinatario, mensagem);

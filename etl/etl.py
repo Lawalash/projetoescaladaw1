@@ -1,212 +1,240 @@
 #!/usr/bin/env python3
-"""
-QW1 ETL - Extração, Transformação e Carga de dados CSV para MySQL
-Suporta CSV e Excel (XLSX)
-"""
+"""ETL AuroraCare - Importação de planilhas para o banco do lar"""
 
-import sys
-import os
+from __future__ import annotations
+
 import argparse
 import json
+import os
+import sys
+from dataclasses import dataclass
 from datetime import datetime
-import pandas as pd
-from sqlalchemy import create_engine
-from dotenv import load_dotenv
+from typing import List
 
-# Carregar variáveis de ambiente
+import pandas as pd
+from dotenv import load_dotenv
+from sqlalchemy import create_engine
+
+
 load_dotenv()
 
-# Configurações do banco
-DB_HOST = os.getenv('DB_HOST', 'localhost')
-DB_PORT = os.getenv('DB_PORT', '3306')
-DB_USER = os.getenv('DB_USER', 'root')
-DB_PASSWORD = os.getenv('DB_PASSWORD', '')
-DB_NAME = os.getenv('DB_NAME', 'qw1_relatorios')
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "3306")
+DB_USER = os.getenv("DB_USER", "root")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+DB_NAME = os.getenv("DB_NAME", "aurora_care")
 
-# String de conexão MySQL
-CONNECTION_STRING = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-
-
-def validar_colunas(df):
-    """
-    Valida se o DataFrame possui as colunas obrigatórias
-    """
-    colunas_obrigatorias = ['data_venda', 'produto', 'preco_unitario']
-    colunas_faltando = [col for col in colunas_obrigatorias if col not in df.columns]
-    
-    if colunas_faltando:
-        raise ValueError(f"Colunas obrigatórias faltando: {', '.join(colunas_faltando)}")
-    
-    return True
+CONNECTION_STRING = (
+    f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+)
 
 
-def limpar_dados(df):
-    """
-    Limpa e transforma os dados
-    """
-    # Criar cópia para não modificar original
-    df_clean = df.copy()
-    
-    # Remover linhas completamente vazias
-    df_clean = df_clean.dropna(how='all')
-    
-    # Converter data_venda para datetime
-    df_clean['data_venda'] = pd.to_datetime(df_clean['data_venda'], errors='coerce')
-    
-    # Converter hora_venda (se existir)
-    if 'hora_venda' in df_clean.columns:
-        df_clean['hora_venda'] = pd.to_datetime(df_clean['hora_venda'], format='%H:%M:%S', errors='coerce').dt.time
-    else:
-        df_clean['hora_venda'] = None
-    
-    # Preencher valores padrão
-    if 'loja' not in df_clean.columns:
-        df_clean['loja'] = 'Loja Padrão'
-    else:
-        df_clean['loja'] = df_clean['loja'].fillna('Loja Padrão')
-    
-    if 'quantidade' not in df_clean.columns:
-        df_clean['quantidade'] = 1
-    else:
-        df_clean['quantidade'] = pd.to_numeric(df_clean['quantidade'], errors='coerce').fillna(1).astype(int)
-    
-    # Converter valores numéricos
-    df_clean['preco_unitario'] = pd.to_numeric(df_clean['preco_unitario'], errors='coerce')
-    
-    # Calcular total se não existir
-    if 'total' not in df_clean.columns or df_clean['total'].isna().all():
-        df_clean['total'] = df_clean['quantidade'] * df_clean['preco_unitario']
-    else:
-        df_clean['total'] = pd.to_numeric(df_clean['total'], errors='coerce')
-        # Recalcular onde total está vazio
-        mask = df_clean['total'].isna()
-        df_clean.loc[mask, 'total'] = df_clean.loc[mask, 'quantidade'] * df_clean.loc[mask, 'preco_unitario']
-    
-    # Remover linhas com dados críticos inválidos
-    df_clean = df_clean.dropna(subset=['data_venda', 'produto', 'preco_unitario'])
-    
-    # Selecionar apenas colunas necessárias
-    colunas_finais = ['data_venda', 'hora_venda', 'loja', 'produto', 'quantidade', 'preco_unitario', 'total']
-    df_clean = df_clean[colunas_finais]
-    
-    return df_clean
+@dataclass
+class ResultadoETL:
+    sucesso: bool
+    registros_lidos: int
+    registros_inseridos: int
+    registros_descartados: int
+    erros: List[str]
 
-
-def processar_arquivo(file_path, engine):
-    """
-    Processa arquivo CSV ou Excel e carrega no MySQL
-    """
-    # Verificar se arquivo existe
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"Arquivo não encontrado: {file_path}")
-    
-    # Detectar tipo de arquivo e ler
-    extensao = os.path.splitext(file_path)[1].lower()
-    
-    print(f"📂 Lendo arquivo: {file_path}")
-    
-    if extensao == '.csv':
-        df = pd.read_csv(file_path)
-    elif extensao in ['.xlsx', '.xls']:
-        df = pd.read_excel(file_path)
-    else:
-        raise ValueError(f"Formato de arquivo não suportado: {extensao}")
-    
-    print(f"   Linhas lidas: {len(df)}")
-    
-    # Validar colunas
-    validar_colunas(df)
-    print("   ✅ Colunas validadas")
-    
-    # Limpar dados
-    df_clean = limpar_dados(df)
-    linhas_removidas = len(df) - len(df_clean)
-    
-    if linhas_removidas > 0:
-        print(f"   ⚠️  {linhas_removidas} linhas removidas (dados inválidos)")
-    
-    print(f"   Linhas válidas para inserção: {len(df_clean)}")
-    
-    # Inserir no banco
-    try:
-        df_clean.to_sql(
-            name='vendas',
-            con=engine,
-            if_exists='append',
-            index=False,
-            chunksize=1000
-        )
-        print(f"   ✅ {len(df_clean)} linhas inseridas com sucesso!")
-        
+    def to_dict(self) -> dict:
         return {
-            'sucesso': True,
-            'linhas_lidas': len(df),
-            'linhas_inseridas': len(df_clean),
-            'linhas_descartadas': linhas_removidas
+            "sucesso": self.sucesso,
+            "registros_lidos": self.registros_lidos,
+            "registros_inseridos": self.registros_inseridos,
+            "registros_descartados": self.registros_descartados,
+            "erros": self.erros,
         }
-        
-    except Exception as e:
-        print(f"   ❌ Erro ao inserir dados: {str(e)}")
-        raise
 
 
-def main():
-    """
-    Função principal
-    """
-    parser = argparse.ArgumentParser(description='ETL QW1 - Importar CSV/Excel para MySQL')
-    parser.add_argument('--file', required=True, help='Caminho do arquivo CSV ou Excel')
-    parser.add_argument('--output-json', action='store_true', help='Retornar resultado em JSON')
-    
-    args = parser.parse_args()
-    
-    inicio = datetime.now()
-    
+def ler_planilha(caminho: str) -> pd.DataFrame:
+    if not os.path.exists(caminho):
+        raise FileNotFoundError(f"Arquivo não encontrado: {caminho}")
+
+    extensao = os.path.splitext(caminho)[1].lower()
+    if extensao == ".csv":
+        return pd.read_csv(caminho)
+    if extensao in {".xlsx", ".xls"}:
+        return pd.read_excel(caminho)
+    raise ValueError("Formato de arquivo não suportado. Use CSV ou Excel.")
+
+
+def preparar_estoque(df: pd.DataFrame, tipo: str) -> pd.DataFrame:
+    df = df.copy()
+    df.columns = [col.strip().lower() for col in df.columns]
+
+    obrigatorias = {"categoria", "item", "quantidade", "unidade"}
+    faltando = obrigatorias.difference(set(df.columns))
+    if faltando:
+        raise ValueError(
+            "Planilha de estoque deve conter as colunas: " + ", ".join(sorted(faltando))
+        )
+
+    df["quantidade"] = pd.to_numeric(df["quantidade"], errors="coerce").fillna(0)
+    if "consumo_diario" in df.columns:
+        df["consumo_diario"] = pd.to_numeric(
+            df["consumo_diario"], errors="coerce"
+        ).fillna(0)
+    else:
+        df["consumo_diario"] = 0
+
+    if "validade" in df.columns:
+        df["validade"] = pd.to_datetime(df["validade"], errors="coerce")
+    else:
+        df["validade"] = pd.NaT
+
+    df["categoria"] = df["categoria"].fillna("Geral").astype(str)
+    df["item"] = df["item"].fillna("Sem descrição").astype(str)
+    df["unidade"] = df["unidade"].fillna("un").astype(str)
+    df["tipo"] = tipo
+    df["lote"] = df.get("lote", pd.Series([None] * len(df)))
+    df["fornecedor"] = df.get("fornecedor", pd.Series([None] * len(df)))
+    df["observacoes"] = df.get("observacoes", pd.Series([None] * len(df)))
+
+    colunas = [
+        "tipo",
+        "categoria",
+        "item",
+        "unidade",
+        "quantidade",
+        "consumo_diario",
+        "validade",
+        "lote",
+        "fornecedor",
+        "observacoes",
+    ]
+    return df[colunas]
+
+
+def preparar_saude(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df.columns = [col.strip().lower() for col in df.columns]
+
+    obrigatorias = {
+        "data_ref",
+        "pressao_sistolica",
+        "pressao_diastolica",
+        "frequencia_cardiaca",
+        "glicemia",
+    }
+    faltando = obrigatorias.difference(set(df.columns))
+    if faltando:
+        raise ValueError(
+            "Planilha de saúde deve conter as colunas: " + ", ".join(sorted(faltando))
+        )
+
+    df["data_ref"] = pd.to_datetime(df["data_ref"], errors="coerce")
+    df = df.dropna(subset=["data_ref"])
+
+    numericas = [
+        "pressao_sistolica",
+        "pressao_diastolica",
+        "frequencia_cardiaca",
+        "glicemia",
+        "incidentes_quedas",
+        "internacoes",
+        "pontuacao_bem_estar",
+        "taxa_ocupacao",
+        "taxa_obito",
+    ]
+    for coluna in numericas:
+        if coluna in df.columns:
+            df[coluna] = pd.to_numeric(df[coluna], errors="coerce").fillna(0)
+        else:
+            df[coluna] = 0
+
+    return df[
+        [
+            "data_ref",
+            "pressao_sistolica",
+            "pressao_diastolica",
+            "frequencia_cardiaca",
+            "glicemia",
+            "incidentes_quedas",
+            "internacoes",
+            "pontuacao_bem_estar",
+            "taxa_ocupacao",
+            "taxa_obito",
+        ]
+    ]
+
+
+def importar_planilha(caminho: str, tipo: str, engine) -> ResultadoETL:
+    df = ler_planilha(caminho)
+    registros_lidos = len(df)
+
+    if registros_lidos == 0:
+        return ResultadoETL(True, 0, 0, 0, ["Planilha sem registros."])
+
+    if tipo in {"estoque_alimentos", "estoque_limpeza"}:
+        preparado = preparar_estoque(df, "alimentos" if "alimentos" in tipo else "limpeza")
+        tabela = "estoque_itens"
+    elif tipo == "saude_diaria":
+        preparado = preparar_saude(df)
+        tabela = "metricas_saude"
+    else:
+        raise ValueError("Tipo de importação desconhecido.")
+
+    descartados = registros_lidos - len(preparado)
+
+    preparado.to_sql(
+        tabela,
+        con=engine,
+        if_exists="append",
+        index=False,
+        chunksize=100,
+        method="multi",
+    )
+
+    return ResultadoETL(
+        True,
+        registros_lidos,
+        len(preparado),
+        descartados,
+        [],
+    )
+
+
+def main(argv: List[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Importar planilhas para o AuroraCare")
+    parser.add_argument("--file", required=True, help="Caminho para a planilha CSV/XLSX")
+    parser.add_argument(
+        "--tipo",
+        choices=["estoque_alimentos", "estoque_limpeza", "saude_diaria"],
+        default="estoque_alimentos",
+        help="Tipo de dados que será importado",
+    )
+    parser.add_argument("--output-json", action="store_true", help="Retornar resultado em JSON")
+
+    args = parser.parse_args(argv)
+
+    engine = create_engine(CONNECTION_STRING)
+
     try:
-        print("\n" + "="*60)
-        print("QW1 ETL - Iniciando processamento")
-        print("="*60 + "\n")
-        
-        # Criar engine de conexão
-        engine = create_engine(CONNECTION_STRING)
-        
-        # Testar conexão
-        with engine.connect() as conn:
-            print("✅ Conexão com MySQL estabelecida\n")
-        
-        # Processar arquivo
-        resultado = processar_arquivo(args.file, engine)
-        
-        # Calcular tempo de execução
-        tempo_execucao = (datetime.now() - inicio).total_seconds()
-        resultado['tempo_execucao'] = f"{tempo_execucao:.2f}s"
-        
-        print("\n" + "="*60)
-        print("✅ ETL Concluído com Sucesso!")
-        print("="*60)
-        print(f"Linhas processadas: {resultado['linhas_lidas']}")
-        print(f"Linhas inseridas: {resultado['linhas_inseridas']}")
-        print(f"Linhas descartadas: {resultado['linhas_descartadas']}")
-        print(f"Tempo de execução: {resultado['tempo_execucao']}")
-        print("="*60 + "\n")
-        
-        # Retornar JSON se solicitado (para integração com Node)
+        resultado = importar_planilha(args.file, args.tipo, engine)
+    except Exception as exc:  # pylint: disable=broad-except
+        mensagem = f"Erro ao processar planilha: {exc}"
         if args.output_json:
-            print(json.dumps(resultado))
-        
-        return 0
-        
-    except Exception as e:
-        print(f"\n❌ Erro fatal: {str(e)}\n")
-        
-        if args.output_json:
-            print(json.dumps({
-                'sucesso': False,
-                'erro': str(e)
-            }))
-        
+            print(json.dumps({"sucesso": False, "erro": mensagem}, ensure_ascii=False))
+        else:
+            print(mensagem)
         return 1
 
+    if args.output_json:
+        print(json.dumps(resultado.to_dict(), default=str, ensure_ascii=False))
+    else:
+        print("✅ Importação concluída")
+        print(f"   Registros lidos: {resultado.registros_lidos}")
+        print(f"   Inseridos: {resultado.registros_inseridos}")
+        if resultado.registros_descartados:
+            print(f"   Descartados: {resultado.registros_descartados}")
+        if resultado.erros:
+            print("   Erros:")
+            for erro in resultado.erros:
+                print(f"     - {erro}")
 
-if __name__ == '__main__':
+    return 0
+
+
+if __name__ == "__main__":
     sys.exit(main())

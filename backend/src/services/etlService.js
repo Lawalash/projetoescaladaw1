@@ -6,78 +6,6 @@ const { parse } = require('csv-parse/sync');
 const { query } = require('../db/connection');
 
 /**
- * Processa CSV usando Node.js (alternativa ao Python)
- */
-exports.processarCSVNode = async (filePath) => {
-  try {
-    // Ler arquivo CSV
-    const fileContent = fs.readFileSync(filePath, 'utf-8');
-    
-    // Parse CSV
-    const records = parse(fileContent, {
-      columns: true,
-      skip_empty_lines: true,
-      trim: true
-    });
-    
-    let inseridos = 0;
-    let erros = 0;
-    const errosDetalhes = [];
-    
-    // Inserir cada registro
-    for (const record of records) {
-      try {
-        // Validar campos obrigatórios
-        if (!record.data_venda || !record.produto || !record.preco_unitario) {
-          erros++;
-          errosDetalhes.push({ linha: inseridos + erros, erro: 'Campos obrigatórios faltando' });
-          continue;
-        }
-        
-        // Calcular total se não existir
-        const quantidade = parseInt(record.quantidade) || 1;
-        const precoUnitario = parseFloat(record.preco_unitario);
-        const total = record.total ? parseFloat(record.total) : quantidade * precoUnitario;
-        
-        // Inserir no banco
-        await query(`
-          INSERT INTO vendas (data_venda, hora_venda, loja, produto, quantidade, preco_unitario, total)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, [
-          record.data_venda,
-          record.hora_venda || null,
-          record.loja || 'Loja Padrão',
-          record.produto,
-          quantidade,
-          precoUnitario,
-          total
-        ]);
-        
-        inseridos++;
-      } catch (error) {
-        erros++;
-        errosDetalhes.push({ 
-          linha: inseridos + erros, 
-          erro: error.message 
-        });
-      }
-    }
-    
-    // Remover arquivo após processamento
-    fs.unlinkSync(filePath);
-    
-    return {
-      processados: records.length,
-      inseridos,
-      erros,
-      ...(erros > 0 && { errosDetalhes: errosDetalhes.slice(0, 10) }) // Mostrar até 10 erros
-    };
-  } catch (error) {
-    throw new Error(`Erro ao processar CSV: ${error.message}`);
-  }
-};
-
-/**
  * Executa script Python para ETL
  */
 exports.executarETLPython = (filePath) => {
@@ -127,34 +55,100 @@ exports.executarETLPython = (filePath) => {
   });
 };
 
-/**
- * Validar estrutura do CSV
- */
-exports.validarCSV = (filePath) => {
+module.exports = exports;
+
+exports.processarPlanilhaEstoque = async (filePath, tipoEstoque = 'alimentos') => {
   try {
-    const fileContent = fs.readFileSync(filePath, 'utf-8');
-    const records = parse(fileContent, {
-      columns: true,
-      skip_empty_lines: true,
-      to_line: 5 // Ler apenas 5 linhas para validação
-    });
-    
-    const colunasObrigatorias = ['data_venda', 'produto', 'preco_unitario'];
-    const colunas = records.length > 0 ? Object.keys(records[0]) : [];
-    
-    const colunasFaltando = colunasObrigatorias.filter(col => !colunas.includes(col));
-    
-    if (colunasFaltando.length > 0) {
-      return {
-        valido: false,
-        erro: `Colunas obrigatórias faltando: ${colunasFaltando.join(', ')}`
-      };
+    let xlsx;
+    const extensao = path.extname(filePath).toLowerCase();
+    let registros = [];
+
+    if (extensao === '.csv') {
+      const fileContent = fs.readFileSync(filePath, 'utf-8');
+      registros = parse(fileContent, {
+        columns: true,
+        skip_empty_lines: true,
+        trim: true
+      });
+    } else if (extensao === '.xlsx' || extensao === '.xls') {
+      try {
+        // eslint-disable-next-line global-require
+        xlsx = require('xlsx');
+      } catch (error) {
+        throw new Error('Dependência "xlsx" não instalada. Execute npm install na pasta backend.');
+      }
+      const workbook = xlsx.readFile(filePath, { cellDates: true });
+      const primeiraAba = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[primeiraAba];
+      registros = xlsx.utils.sheet_to_json(sheet, { defval: '', raw: false });
+    } else {
+      throw new Error('Formato não suportado para planilha de estoque');
     }
-    
-    return { valido: true, colunas };
+
+    let inseridos = 0;
+    let erros = 0;
+    const errosDetalhes = [];
+
+    for (const [indice, registro] of registros.entries()) {
+      try {
+        const categoria = registro.categoria || registro.Categoria || registro.setor || 'Geral';
+        const item = registro.item || registro.Item || registro.nome || registro.Nome;
+        const unidade = registro.unidade || registro.Unidade || registro.medida || null;
+        const quantidade = Number.parseFloat(registro.quantidade || registro.Quantidade || 0) || 0;
+        const consumoDiario = Number.parseFloat(
+          registro.consumo_diario ||
+            registro.consumoDiario ||
+            registro['Consumo Diário'] ||
+            0
+        ) || 0;
+        const validade = registro.validade || registro.Validade || null;
+        const lote = registro.lote || registro.Lote || null;
+        const fornecedor = registro.fornecedor || registro.Fornecedor || null;
+        const observacoes = registro.observacoes || registro.Observacoes || registro['Observações'] || null;
+
+        if (!item) {
+          throw new Error('Coluna "item" não encontrada na planilha');
+        }
+
+        await query(
+          `
+            INSERT INTO estoque_itens
+              (tipo_estoque, categoria, nome_item, unidade, quantidade_atual, consumo_diario, validade, lote, fornecedor, observacoes, atualizado_em)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+          `,
+          [
+            tipoEstoque,
+            categoria,
+            item,
+            unidade,
+            quantidade,
+            consumoDiario,
+            validade ? new Date(validade) : null,
+            lote,
+            fornecedor,
+            observacoes
+          ]
+        );
+
+        inseridos += 1;
+      } catch (error) {
+        erros += 1;
+        errosDetalhes.push({ linha: indice + 2, erro: error.message });
+      }
+    }
+
+    fs.unlinkSync(filePath);
+
+    return {
+      registros: registros.length,
+      inseridos,
+      erros,
+      errosDetalhes: errosDetalhes.slice(0, 15)
+    };
   } catch (error) {
-    return { valido: false, erro: error.message };
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    throw new Error(`Erro ao processar planilha de estoque: ${error.message}`);
   }
 };
-
-module.exports = exports;
