@@ -28,7 +28,7 @@ async function ensureUsuarioRoleEnum() {
 
 async function ensureDefaultUsers() {
   try {
-    const tabelaUsuarios = await query('SHOW TABLES LIKE ?', ['usuarios']);
+    const tabelaUsuarios = await query("SHOW TABLES LIKE 'usuarios'");
     if (!tabelaUsuarios.length) {
       return;
     }
