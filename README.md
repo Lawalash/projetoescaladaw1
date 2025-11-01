@@ -10,3 +10,18 @@ Este repositório reúne backend, frontend e automações de ETL para o AuroraCa
 
 Para instruções detalhadas de configuração consulte `frontend/README.md`.
 
+### Banco de dados de desenvolvimento
+
+O backend espera um banco MySQL chamado `qw1_relatorios` (configurável via variáveis `DB_*`).
+Para recriar toda a estrutura e popular dados de exemplo execute:
+
+```bash
+cd backend
+npm install
+npm run db:reset
+```
+
+O script `db:reset` remove tabelas existentes, recria o esquema utilizado pela API
+(`residentes`, `leitos`, `metricas_*`, cronogramas, estoque etc.) e insere registros
+fictícios suficientes para que o painel do frontend seja carregado sem erros.
+

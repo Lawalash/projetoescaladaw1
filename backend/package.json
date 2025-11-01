@@ -7,6 +7,7 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "cron": "node cron/jobs.js",
+    "db:reset": "node scripts/resetDatabase.js",
     "test": "jest"
   },
   "keywords": [
