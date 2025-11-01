@@ -12,6 +12,7 @@ const path = require('path');
 const larRoutes = require('./routes/lar');
 const authRoutes = require('./routes/auth');
 const { authenticate } = require('./middleware/authMiddleware');
+const { ensureDefaultUsers } = require('./services/userSeedService');
 
 // Inicializar app
 const app = express();
@@ -69,6 +70,10 @@ app.get('/health', (req, res) => {
 // Rotas da API
 app.use('/api/auth', authRoutes);
 app.use('/api/lar', authenticate, larRoutes);
+
+ensureDefaultUsers().catch((error) => {
+  console.warn('Falha ao garantir usuários padrão na inicialização:', error.message);
+});
 
 // Rota de teste
 app.get('/', (req, res) => {

@@ -50,7 +50,7 @@ async function criarEstrutura(connection) {
       nome VARCHAR(120) NOT NULL,
       email VARCHAR(160) NOT NULL UNIQUE,
       senha_hash VARCHAR(255) NOT NULL,
-      role ENUM('patrao','asg','enfermaria') NOT NULL DEFAULT 'asg',
+      role ENUM('patrao','asg','enfermaria','supervisora') NOT NULL DEFAULT 'asg',
       criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
       atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
