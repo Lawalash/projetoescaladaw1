@@ -1,5 +1,6 @@
 const { query } = require('../db/connection');
 const { verifyPassword, generateToken } = require('../utils/security');
+const operacionalService = require('../services/operacionalService');
 
 const DEFAULT_SECRET = process.env.JWT_SECRET || 'auroracare-dev-secret';
 
@@ -25,6 +26,8 @@ exports.login = async (req, res) => {
       DEFAULT_SECRET
     );
 
+    const membrosEquipe = await operacionalService.obterEquipePorUsuario(usuario.id, usuario.role);
+
     res.json({
       token,
       usuario: {
@@ -32,7 +35,8 @@ exports.login = async (req, res) => {
         nome: usuario.nome,
         email: usuario.email,
         role: usuario.role
-      }
+      },
+      membrosEquipe
     });
   } catch (error) {
     console.error('Erro no login:', error);

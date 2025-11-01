@@ -1,6 +1,7 @@
 const { query } = require('../db/connection');
 const etlService = require('../services/etlService');
 const notificationService = require('../services/notificationService');
+const operacionalService = require('../services/operacionalService');
 
 function formatarDataISO(date) {
   return date.toISOString().slice(0, 10);
@@ -432,5 +433,213 @@ exports.removerNotificacao = async (req, res) => {
   } catch (error) {
     console.error('Erro ao remover destinatário:', error);
     res.status(500).json({ error: 'Erro ao remover destinatário: ' + error.message });
+  }
+};
+
+exports.obterEquipeOperacional = async (req, res) => {
+  try {
+    const roleUsuario = req.user?.role;
+    const { role: roleFiltro } = req.query || {};
+
+    let membros;
+    if (roleUsuario === 'patrao' && roleFiltro) {
+      membros = await operacionalService.obterEquipePorRole(roleFiltro);
+    } else {
+      membros = await operacionalService.obterEquipePorUsuario(req.user.id, roleUsuario);
+    }
+
+    res.json({ membros });
+  } catch (error) {
+    console.error('Erro ao obter equipe operacional:', error);
+    res.status(500).json({ error: 'Não foi possível carregar a equipe operacional.' });
+  }
+};
+
+exports.listarTarefasOperacionais = async (req, res) => {
+  try {
+    const roleUsuario = req.user?.role;
+    const { role: roleFiltro, membroId } = req.query || {};
+
+    const roleConsulta = roleUsuario === 'patrao'
+      ? (roleFiltro && roleFiltro !== 'todas' ? roleFiltro : undefined)
+      : roleUsuario;
+
+    const membro = membroId ? Number.parseInt(membroId, 10) : null;
+    if (roleUsuario !== 'patrao' && membro && !(await operacionalService.membroPertenceAoUsuario(membro, req.user.id))) {
+      return res.status(403).json({ error: 'Colaborador não pertence a este usuário.' });
+    }
+
+    const tarefas = await operacionalService.listarTarefas({
+      role: roleConsulta,
+      membroId: membro || undefined,
+      incluirValidacoes: roleUsuario === 'patrao'
+    });
+
+    res.json({ tarefas });
+  } catch (error) {
+    console.error('Erro ao listar tarefas operacionais:', error);
+    res.status(500).json({ error: 'Não foi possível listar as tarefas.' });
+  }
+};
+
+exports.criarTarefaOperacional = async (req, res) => {
+  try {
+    if (req.user?.role !== 'patrao') {
+      return res.status(403).json({ error: 'Somente a direção pode cadastrar novas tarefas.' });
+    }
+
+    const { titulo, descricao, roleDestino, dataLimite, documentoUrl } = req.body || {};
+
+    if (!titulo || !roleDestino) {
+      return res.status(400).json({ error: 'Título e role destino são obrigatórios.' });
+    }
+
+    if (!['asg', 'enfermaria'].includes(roleDestino)) {
+      return res.status(400).json({ error: 'Role destino inválida.' });
+    }
+
+    const tarefaId = await operacionalService.criarTarefa({
+      titulo,
+      descricao,
+      roleDestino,
+      dataLimite: dataLimite || null,
+      documentoUrl: documentoUrl || null,
+      criadoPor: req.user.id
+    });
+
+    const [tarefa] = await query(
+      `SELECT t.id, t.titulo, t.descricao, t.role_destino AS roleDestino, t.data_limite AS dataLimite,
+              t.documento_url AS documentoUrl, t.criado_em AS criadoEm, u.nome AS criadoPorNome
+       FROM tarefas t
+       LEFT JOIN usuarios u ON u.id = t.criado_por
+       WHERE t.id = ?
+       LIMIT 1`,
+      [tarefaId]
+    );
+
+    res.status(201).json({
+      tarefa: {
+        ...tarefa,
+        totalConcluidas: 0,
+        totalValidacoes: 0,
+        validacoes: []
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao criar tarefa operacional:', error);
+    res.status(500).json({ error: 'Não foi possível criar a tarefa.' });
+  }
+};
+
+exports.validarTarefaOperacional = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { membroId, status, observacao, anexoUrl } = req.body || {};
+
+    const tarefaId = Number.parseInt(id, 10);
+    if (!tarefaId || !status) {
+      return res.status(400).json({ error: 'Tarefa e status são obrigatórios.' });
+    }
+
+    const statusNormalizado = status.toLowerCase();
+    if (!['pendente', 'concluida', 'nao_realizada'].includes(statusNormalizado)) {
+      return res.status(400).json({ error: 'Status informado é inválido.' });
+    }
+
+    const membro = membroId ? Number.parseInt(membroId, 10) : null;
+    const roleUsuario = req.user?.role;
+
+    if (!membro) {
+      return res.status(400).json({ error: 'Informe o colaborador responsável pela validação.' });
+    }
+
+    if (roleUsuario === 'patrao') {
+      const membroRegistro = await operacionalService.obterMembroPorId(membro);
+      if (!membroRegistro) {
+        return res.status(404).json({ error: 'Colaborador não encontrado.' });
+      }
+    } else if (!(await operacionalService.membroPertenceAoUsuario(membro, req.user.id))) {
+      return res.status(403).json({ error: 'Colaborador não pertence a este usuário.' });
+    }
+
+    const validacao = await operacionalService.registrarValidacaoTarefa({
+      tarefaId,
+      membroId: membro,
+      status: statusNormalizado,
+      observacao,
+      anexoUrl
+    });
+
+    res.json({ validacao });
+  } catch (error) {
+    console.error('Erro ao validar tarefa operacional:', error);
+    res.status(500).json({ error: 'Não foi possível registrar a validação da tarefa.' });
+  }
+};
+
+exports.registrarPontoColaborador = async (req, res) => {
+  try {
+    const { membroId, tipo, observacao, dataHora } = req.body || {};
+    const membro = membroId ? Number.parseInt(membroId, 10) : null;
+
+    if (!membro) {
+      return res.status(400).json({ error: 'Selecione um colaborador antes de registrar o ponto.' });
+    }
+
+    const roleUsuario = req.user?.role;
+
+    if (roleUsuario === 'patrao') {
+      const membroRegistro = await operacionalService.obterMembroPorId(membro);
+      if (!membroRegistro) {
+        return res.status(404).json({ error: 'Colaborador não encontrado.' });
+      }
+    } else if (!(await operacionalService.membroPertenceAoUsuario(membro, req.user.id))) {
+      return res.status(403).json({ error: 'Colaborador não pertence a este usuário.' });
+    }
+
+    await operacionalService.registrarPonto({
+      membroId: membro,
+      usuarioId: req.user.id,
+      tipo,
+      observacao,
+      dataHora
+    });
+
+    res.status(201).json({ success: true });
+  } catch (error) {
+    console.error('Erro ao registrar ponto do colaborador:', error);
+    res.status(500).json({ error: 'Não foi possível registrar o ponto.' });
+  }
+};
+
+exports.listarPontosColaboradores = async (req, res) => {
+  try {
+    const { membroId, role: roleFiltro, limite } = req.query || {};
+    const roleUsuario = req.user?.role;
+    const membro = membroId ? Number.parseInt(membroId, 10) : null;
+
+    if (roleUsuario !== 'patrao') {
+      if (membro && !(await operacionalService.membroPertenceAoUsuario(membro, req.user.id))) {
+        return res.status(403).json({ error: 'Colaborador não pertence a este usuário.' });
+      }
+    } else if (membro) {
+      const membroRegistro = await operacionalService.obterMembroPorId(membro);
+      if (!membroRegistro) {
+        return res.status(404).json({ error: 'Colaborador não encontrado.' });
+      }
+    }
+
+    const registros = await operacionalService.listarPontos({
+      role: roleUsuario === 'patrao'
+        ? (roleFiltro && roleFiltro !== 'todas' ? roleFiltro : undefined)
+        : roleUsuario,
+      membroId: membro || undefined,
+      limite
+    });
+
+    res.json({ registros });
+  } catch (error) {
+    console.error('Erro ao listar pontos dos colaboradores:', error);
+    res.status(500).json({ error: 'Não foi possível carregar o histórico de pontos.' });
   }
 };
