@@ -73,4 +73,61 @@ export const testarNotificacao = async ({ tipo, destinatario }) => {
   return response.data;
 };
 
+export const obterEquipeOperacional = async ({ role } = {}) => {
+  const response = await api.get('/lar/equipe', {
+    params: role ? { role } : {}
+  });
+  return response.data;
+};
+
+export const listarTarefasOperacionais = async ({ role, membroId } = {}) => {
+  const params = {};
+  if (role) params.role = role;
+  if (membroId) params.membroId = membroId;
+
+  const response = await api.get('/lar/tarefas', { params });
+  return response.data;
+};
+
+export const criarTarefaOperacional = async ({ titulo, descricao, roleDestino, dataLimite, documentoUrl }) => {
+  const response = await api.post('/lar/tarefas', {
+    titulo,
+    descricao,
+    roleDestino,
+    dataLimite,
+    documentoUrl
+  });
+  return response.data;
+};
+
+export const validarTarefaOperacional = async ({ tarefaId, membroId, status, observacao, anexoUrl }) => {
+  const response = await api.patch(`/lar/tarefas/${tarefaId}/validar`, {
+    membroId,
+    status,
+    observacao,
+    anexoUrl
+  });
+  return response.data;
+};
+
+export const registrarPontoColaborador = async ({ membroId, tipo, observacao, dataHora }) => {
+  const response = await api.post('/lar/pontos', {
+    membroId,
+    tipo,
+    observacao,
+    dataHora
+  });
+  return response.data;
+};
+
+export const listarPontosColaboradores = async ({ role, membroId, limite } = {}) => {
+  const params = {};
+  if (role) params.role = role;
+  if (membroId) params.membroId = membroId;
+  if (limite) params.limite = limite;
+
+  const response = await api.get('/lar/pontos', { params });
+  return response.data;
+};
+
 export default api;

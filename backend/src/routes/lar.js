@@ -33,6 +33,12 @@ const upload = multer({
 });
 
 router.get('/painel', larController.obterPainelCompleto);
+router.get('/equipe', larController.obterEquipeOperacional);
+router.get('/tarefas', larController.listarTarefasOperacionais);
+router.post('/tarefas', larController.criarTarefaOperacional);
+router.patch('/tarefas/:id/validar', larController.validarTarefaOperacional);
+router.post('/pontos', larController.registrarPontoColaborador);
+router.get('/pontos', larController.listarPontosColaboradores);
 router.post('/inventario/upload', upload.single('arquivo'), larController.uploadPlanilhaEstoque);
 router.post('/notificacoes/testar', larController.testarNotificacao);
 router.get('/config/notificacoes', larController.obterConfigNotificacoes);

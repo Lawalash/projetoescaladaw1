@@ -478,3 +478,386 @@
     grid-template-columns: 1fr;
   }
 }
+
+.operacional-controles {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+}
+
+.operacional-card {
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 22px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: 0 18px 36px rgba(41, 72, 152, 0.18);
+  border: 1px solid rgba(236, 240, 255, 0.8);
+}
+
+.operacional-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.operacional-card__header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.operacional-card__header p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: #425466;
+}
+
+.operacional-card__filtros {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.operacional-card__filtros label,
+.operacional-card__meta label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6b7a99;
+}
+
+.operacional-card__filtros select,
+.operacional-card__meta select {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid #d0d8e8;
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+  color: #1f2d3d;
+}
+
+.operacional-card__meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 14px;
+  color: #425466;
+}
+
+.operacional-card__acoes {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.operacional-card__colaborador {
+  font-size: 13px;
+  color: #425466;
+}
+
+.operacional-card__vazio,
+.estado-carregando {
+  padding: 18px 16px;
+  border-radius: 16px;
+  background: rgba(244, 247, 255, 0.8);
+  color: #4a5b7d;
+  font-weight: 500;
+  text-align: center;
+}
+
+.estado-carregando::before {
+  content: '⏳ ';
+}
+
+.lista-tarefas {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tarefa-card {
+  border: 1px solid rgba(224, 231, 255, 0.8);
+  border-radius: 18px;
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.tarefa-card--concluida {
+  border-color: rgba(22, 163, 74, 0.35);
+  background: rgba(220, 252, 231, 0.55);
+}
+
+.tarefa-card--nao_realizada {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(254, 215, 215, 0.55);
+}
+
+.tarefa-card__info h4 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.tarefa-card__info p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: #4a5b7d;
+}
+
+.tarefa-card__meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #6b7a99;
+}
+
+.tarefa-card__meta a {
+  color: #4257b2;
+  font-weight: 600;
+}
+
+.tarefa-card__acoes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tarefa-status {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(66, 87, 178, 0.12);
+  color: #4257b2;
+}
+
+.tarefa-status--concluida {
+  background: rgba(22, 163, 74, 0.16);
+  color: #166534;
+}
+
+.tarefa-status--nao_realizada {
+  background: rgba(248, 113, 113, 0.18);
+  color: #991b1b;
+}
+
+.tarefa-card__botoes {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tarefa-card__botoes button {
+  border: 1px solid rgba(66, 87, 178, 0.25);
+  background: white;
+  border-radius: 12px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tarefa-card__botoes button:hover {
+  border-color: rgba(66, 87, 178, 0.5);
+  color: #4257b2;
+}
+
+.tarefa-card__validacoes {
+  display: grid;
+  gap: 8px;
+}
+
+.tarefa-card__validacao-item {
+  border-radius: 12px;
+  background: rgba(244, 247, 255, 0.8);
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #4a5b7d;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tarefa-card__validacao-item strong {
+  color: #243b53;
+}
+
+.tarefa-card__validacao-item.vazio {
+  text-align: center;
+  font-style: italic;
+  color: #6b7a99;
+}
+
+.form-nova-tarefa {
+  border-top: 1px solid rgba(224, 231, 255, 0.8);
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form-nova-tarefa__grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.form-nova-tarefa__full {
+  grid-column: 1 / -1;
+}
+
+.form-nova-tarefa__grid label,
+.form-nova-tarefa__grid input,
+.form-nova-tarefa__grid select,
+.form-nova-tarefa__grid textarea,
+.form-ponto__grid select,
+.form-ponto__grid input {
+  font-size: 14px;
+}
+
+.form-nova-tarefa__grid label,
+.form-ponto__grid label {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #6b7a99;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.form-nova-tarefa__grid input,
+.form-nova-tarefa__grid select,
+.form-nova-tarefa__grid textarea,
+.form-ponto__grid select,
+.form-ponto__grid input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #d0d8e8;
+  background: rgba(255, 255, 255, 0.94);
+  color: #1f2d3d;
+}
+
+.form-nova-tarefa__grid textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+
+.btn-primaria {
+  align-self: flex-start;
+  padding: 12px 20px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #5ca4a9 0%, #4257b2 100%);
+  color: #fff;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 14px 28px rgba(66, 87, 178, 0.28);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-primaria:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn-primaria:not(:disabled):hover {
+  transform: translateY(-2px);
+}
+
+.form-ponto {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.form-ponto__grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.lista-pontos {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ponto-item {
+  border: 1px solid rgba(224, 231, 255, 0.7);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(248, 250, 255, 0.85);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #4a5b7d;
+}
+
+.ponto-item--entrada {
+  border-color: rgba(22, 163, 74, 0.2);
+}
+
+.ponto-item--saida {
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.ponto-item--intervalo {
+  border-color: rgba(14, 165, 233, 0.2);
+}
+
+.ponto-item__cabecalho {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-weight: 600;
+  color: #243b53;
+}
+
+.ponto-item__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #6b7a99;
+}
+
+.tag-ponto {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.tag-ponto--entrada {
+  background: rgba(22, 163, 74, 0.15);
+  color: #166534;
+}
+
+.tag-ponto--saida {
+  background: rgba(239, 68, 68, 0.15);
+  color: #991b1b;
+}
+
+.tag-ponto--intervalo {
+  background: rgba(14, 165, 233, 0.15);
+  color: #0f4c81;
+}
