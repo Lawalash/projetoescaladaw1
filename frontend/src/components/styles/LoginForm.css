@@ -1,0 +1,114 @@
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #4257b2 0%, #5ca4a9 100%);
+  padding: 24px;
+}
+
+.login-card {
+  width: min(420px, 100%);
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 18px;
+  padding: 32px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.3);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.login-card__header h1 {
+  font-size: 24px;
+  color: #1f2d3d;
+  margin-bottom: 6px;
+}
+
+.login-card__header p {
+  font-size: 14px;
+  color: #475569;
+}
+
+.login-card__form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.login-card__form label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.login-card__form input {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.login-card__form input:focus {
+  border-color: #4257b2;
+  box-shadow: 0 0 0 3px rgba(66, 87, 178, 0.2);
+  outline: none;
+}
+
+.login-card__form button {
+  margin-top: 8px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #4257b2 0%, #5ca4a9 100%);
+  border: none;
+  color: white;
+  font-weight: 600;
+  padding: 12px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-card__form button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(66, 87, 178, 0.3);
+}
+
+.login-card__form button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.login-card__error {
+  color: #dc2626;
+  font-size: 13px;
+}
+
+.login-card__tips {
+  background: rgba(66, 87, 178, 0.08);
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(66, 87, 178, 0.12);
+}
+
+.login-card__tips h2 {
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: #1f2937;
+}
+
+.login-card__tips ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #334155;
+  padding: 0;
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 24px;
+  }
+}

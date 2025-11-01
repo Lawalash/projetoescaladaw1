@@ -294,6 +294,11 @@ exports.obterPainelCompleto = async (req, res) => {
 
 exports.uploadPlanilhaEstoque = async (req, res) => {
   try {
+    const role = req.user?.role;
+    if (role !== 'patrao' && role !== 'asg') {
+      return res.status(403).json({ error: 'Somente direção ou equipe de limpeza podem enviar planilhas.' });
+    }
+
     if (!req.file) {
       return res.status(400).json({ error: 'Nenhum arquivo enviado' });
     }
@@ -325,6 +330,10 @@ exports.uploadPlanilhaEstoque = async (req, res) => {
 
 exports.testarNotificacao = async (req, res) => {
   try {
+    if (req.user?.role !== 'patrao') {
+      return res.status(403).json({ error: 'Apenas a direção pode testar notificações.' });
+    }
+
     const { tipo, destinatario } = req.body;
 
     if (!tipo || !destinatario) {
@@ -372,6 +381,10 @@ exports.testarNotificacao = async (req, res) => {
 
 exports.obterConfigNotificacoes = async (_req, res) => {
   try {
+    if (_req.user?.role !== 'patrao') {
+      return res.status(403).json({ error: 'Apenas a direção pode listar notificações.' });
+    }
+
     const destinatarios = await query('SELECT * FROM config_envio WHERE ativo = 1 ORDER BY criado_em DESC');
     res.json({ destinatarios });
   } catch (error) {
@@ -382,6 +395,10 @@ exports.obterConfigNotificacoes = async (_req, res) => {
 
 exports.salvarConfigNotificacao = async (req, res) => {
   try {
+    if (req.user?.role !== 'patrao') {
+      return res.status(403).json({ error: 'Apenas a direção pode cadastrar notificações.' });
+    }
+
     const { tipo_envio, destinatario, responsavel } = req.body;
 
     if (!tipo_envio || !destinatario) {
@@ -405,6 +422,10 @@ exports.salvarConfigNotificacao = async (req, res) => {
 
 exports.removerNotificacao = async (req, res) => {
   try {
+    if (req.user?.role !== 'patrao') {
+      return res.status(403).json({ error: 'Apenas a direção pode remover notificações.' });
+    }
+
     const { id } = req.params;
     await query('DELETE FROM config_envio WHERE id = ?', [id]);
     res.json({ success: true, mensagem: 'Destinatário removido' });

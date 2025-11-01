@@ -1,0 +1,215 @@
+.relatorio-equipe {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.relatorio-equipe__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.relatorio-equipe__header h2 {
+  margin: 0 0 6px;
+  font-size: 24px;
+  color: #1f2d3d;
+}
+
+.relatorio-equipe__header p {
+  margin: 0;
+  color: #4a5568;
+  font-size: 14px;
+}
+
+.relatorio-equipe__header button {
+  background: linear-gradient(135deg, #4257b2 0%, #5ca4a9 100%);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 20px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.relatorio-equipe__header button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(66, 87, 178, 0.28);
+}
+
+.relatorio-equipe__header button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.relatorio-equipe__erro {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.relatorio-equipe__loading {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 18px;
+  padding: 48px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid rgba(66, 87, 178, 0.12);
+  box-shadow: 0 16px 40px rgba(32, 64, 128, 0.16);
+}
+
+.relatorio-equipe__kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 18px;
+}
+
+.relatorio-equipe__kpi {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 18px;
+  padding: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  box-shadow: 0 14px 32px rgba(71, 85, 105, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.relatorio-equipe__kpi-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #64748b;
+}
+
+.relatorio-equipe__kpi strong {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.relatorio-equipe__kpi p {
+  font-size: 13px;
+  color: #475569;
+}
+
+.relatorio-equipe__grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
+}
+
+.relatorio-equipe__card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 18px 40px rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.relatorio-equipe__card h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #1e293b;
+}
+
+.relatorio-equipe__card--table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.relatorio-equipe__card--table th,
+.relatorio-equipe__card--table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.relatorio-equipe__card--table tbody tr:hover {
+  background: rgba(226, 232, 240, 0.4);
+}
+
+.relatorio-equipe__pendencias {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+}
+
+.relatorio-equipe__pendencias li {
+  border-radius: 14px;
+  padding: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(241, 245, 249, 0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.relatorio-equipe__pendencias li footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #475569;
+}
+
+.relatorio-equipe__pendencias li.prioridade-alto {
+  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(254, 226, 226, 0.6);
+}
+
+.relatorio-equipe__pendencias li.prioridade-médio,
+.relatorio-equipe__pendencias li.prioridade-média {
+  border-color: rgba(251, 191, 36, 0.5);
+  background: rgba(254, 243, 199, 0.6);
+}
+
+.relatorio-equipe__pendencias li.prioridade-baixo {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(191, 219, 254, 0.5);
+}
+
+.relatorio-equipe__card--estrategias ul {
+  list-style: disc inside;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #374151;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.relatorio-equipe__vazio {
+  font-size: 14px;
+  color: #64748b;
+}
+
+@media (max-width: 1024px) {
+  .relatorio-equipe__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .relatorio-equipe__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .relatorio-equipe__header button {
+    width: 100%;
+  }
+}
