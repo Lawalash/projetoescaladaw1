@@ -10,6 +10,8 @@ const path = require('path');
 
 // Rotas
 const larRoutes = require('./routes/lar');
+const authRoutes = require('./routes/auth');
+const { authenticate } = require('./middleware/authMiddleware');
 
 // Inicializar app
 const app = express();
@@ -64,7 +66,8 @@ app.get('/health', (req, res) => {
 });
 
 // Rotas da API
-app.use('/api/lar', larRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/lar', authenticate, larRoutes);
 
 // Rota de teste
 app.get('/', (req, res) => {
@@ -74,6 +77,7 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       painel: '/api/lar/painel',
+      auth: '/api/auth/login',
       inventario: '/api/lar/inventario/upload',
       notificacoes: '/api/lar/notificacoes/testar',
       configNotificacoes: '/api/lar/config/notificacoes'

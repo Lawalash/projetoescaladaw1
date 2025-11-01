@@ -7,12 +7,26 @@ const api = axios.create({
   }
 });
 
+export const setAuthToken = (token) => {
+  if (token) {
+    api.defaults.headers.common.Authorization = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common.Authorization;
+  }
+};
+
+export const login = async ({ email, senha }) => {
+  const response = await api.post('/auth/login', { email, senha });
+  return response.data;
+};
+
 export const obterPainelCompleto = async (inicio, fim) => {
+  const params = {};
+  if (inicio) params.start = inicio;
+  if (fim) params.end = fim;
+
   const response = await api.get('/lar/painel', {
-    params: {
-      start: inicio,
-      end: fim
-    }
+    params
   });
   return response.data;
 };
