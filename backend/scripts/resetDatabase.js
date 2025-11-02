@@ -248,13 +248,12 @@ async function criarEstrutura(connection) {
       titulo VARCHAR(180) NOT NULL,
       descricao TEXT,
       role_destino ENUM('asg','enfermaria','supervisora') NOT NULL,
-      recorrencia ENUM('unica','diaria','semanal') DEFAULT 'unica',
+      recorrencia ENUM('unica','diaria','semanal','mensal') DEFAULT 'unica',
       destino_tipo ENUM('individual','equipe') DEFAULT 'individual',
       destino_membro_id INT NULL,
       destino_nome_snapshot VARCHAR(180) NULL,
       criado_por INT,
       data_limite DATE,
-      documento_url VARCHAR(255),
       criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
     `CREATE TABLE IF NOT EXISTS tarefas_execucoes (
@@ -275,7 +274,7 @@ async function criarEstrutura(connection) {
       membro_id INT NOT NULL,
       usuario_id INT NOT NULL,
       membro_nome VARCHAR(150),
-      tipo ENUM('entrada','saida','intervalo') DEFAULT 'entrada',
+      tipo ENUM('entrada','saida') DEFAULT 'entrada',
       registrado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
       observacao VARCHAR(255)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,

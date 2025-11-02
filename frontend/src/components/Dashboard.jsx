@@ -34,6 +34,17 @@ const ROLE_NOMES = {
   enfermaria: 'Enfermagem',
   supervisora: 'Supervisão ASG'
 };
+const ESTOQUE_LABELS = {
+  alimentos: 'Alimentos',
+  limpeza: 'Produtos de limpeza',
+  medicamentos: 'Medicamentos'
+};
+const formatarNomeEstoque = (tipo) => {
+  if (!tipo) return '';
+  const texto = tipo.replace(/_/g, ' ').trim();
+  if (!texto) return '';
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+};
 const STATUS_LABELS = {
   concluida: 'Concluída',
   pendente: 'Pendente',
@@ -42,7 +53,8 @@ const STATUS_LABELS = {
 const RECORRENCIA_LABELS = {
   unica: 'Única',
   diaria: 'Diária',
-  semanal: 'Semanal'
+  semanal: 'Semanal',
+  mensal: 'Mensal'
 };
 const formatarDataSimples = (valor) => {
   if (!valor) return '';
@@ -95,7 +107,6 @@ function Dashboard({
     descricao: '',
     roleDestino: role === 'supervisora' ? 'asg' : 'asg',
     dataLimite: '',
-    documentoUrl: '',
     recorrencia: 'unica',
     destinoTipo: 'individual',
     destinatarios: []
@@ -111,19 +122,20 @@ function Dashboard({
   const [importandoPontos, setImportandoPontos] = useState(false);
   const [pontosImportStatus, setPontosImportStatus] = useState(null);
   const [estoqueTipoSelecionado, setEstoqueTipoSelecionado] = useState('alimentos');
+  const [modoTarefas, setModoTarefas] = useState('equipe');
 
   const isPatrao = role === 'patrao';
   const isSupervisora = role === 'supervisora';
   const isASG = role === 'asg';
   const isEnfermaria = role === 'enfermaria';
   const podeCriarTarefas = isPatrao || isSupervisora;
-  const permitirUpload = isPatrao || isASG;
+  const permitirUpload = isASG;
   const permitirImportarPontos = isPatrao || isSupervisora;
   const mostrarKPIs = !isASG;
   const mostrarSaude = isPatrao || isEnfermaria;
   const mostrarMedicacao = isPatrao || isEnfermaria;
   const mostrarEstoque = isPatrao || isASG;
-  const mostrarPlanilhas = isPatrao || isASG;
+  const mostrarPlanilhas = isPatrao;
   const membroAtivoId = membroAtivo?.id || null;
   const membroFiltro = isPatrao || isSupervisora ? filtroMembroId : membroAtivoId;
   const colaboradorAtualNome = membroAtivo?.nome;
@@ -176,6 +188,10 @@ function Dashboard({
   useEffect(() => {
     carregarPainel();
   }, [inicio, fim]);
+
+  useEffect(() => {
+    setModoTarefas('equipe');
+  }, [role]);
 
   useEffect(() => {
     if (!isPatrao && !isSupervisora) {
@@ -399,7 +415,6 @@ function Dashboard({
         descricao: novaTarefa.descricao.trim(),
         roleDestino: novaTarefa.roleDestino,
         dataLimite: novaTarefa.dataLimite || undefined,
-        documentoUrl: novaTarefa.documentoUrl || undefined,
         recorrencia: novaTarefa.recorrencia,
         destinoTipo: novaTarefa.destinoTipo,
         destinatarios:
@@ -413,7 +428,6 @@ function Dashboard({
         titulo: '',
         descricao: '',
         dataLimite: '',
-        documentoUrl: '',
         recorrencia: 'unica',
         destinoTipo: 'individual',
         destinatarios: []
@@ -485,27 +499,46 @@ function Dashboard({
     }
   };
 
+  const tarefasVisiveis = useMemo(() => {
+    if (!tarefas.length) return [];
+    if (isSupervisora) {
+      if (modoTarefas === 'pessoais') {
+        return tarefas.filter((tarefa) => tarefa.roleDestino === 'supervisora');
+      }
+      return tarefas;
+    }
+
+    if (!isPatrao && modoTarefas === 'pessoais') {
+      if (!membroAtivoId) return [];
+      return tarefas.filter((tarefa) =>
+        tarefa.destinatarios?.some((destinatario) => Number(destinatario.membroId) === Number(membroAtivoId))
+      );
+    }
+
+    return tarefas;
+  }, [isPatrao, isSupervisora, membroAtivoId, modoTarefas, tarefas]);
+
   const resumoTarefas = useMemo(() => {
-    if (!tarefas.length) {
+    if (!tarefasVisiveis.length) {
       return { total: 0, concluidas: 0, pendentes: 0 };
     }
 
     if (isPatrao) {
-      const concluidas = tarefas.filter((tarefa) => Number(tarefa.totalConcluidas || 0) > 0).length;
+      const concluidas = tarefasVisiveis.filter((tarefa) => Number(tarefa.totalConcluidas || 0) > 0).length;
       return {
-        total: tarefas.length,
+        total: tarefasVisiveis.length,
         concluidas,
-        pendentes: tarefas.length - concluidas
+        pendentes: tarefasVisiveis.length - concluidas
       };
     }
 
-    const concluidas = tarefas.filter((tarefa) => tarefa.validacaoAtual?.status === 'concluida').length;
+    const concluidas = tarefasVisiveis.filter((tarefa) => tarefa.validacaoAtual?.status === 'concluida').length;
     return {
-      total: tarefas.length,
+      total: tarefasVisiveis.length,
       concluidas,
-      pendentes: tarefas.length - concluidas
+      pendentes: tarefasVisiveis.length - concluidas
     };
-  }, [isPatrao, tarefas]);
+  }, [isPatrao, tarefasVisiveis]);
 
   const obterStatusTarefa = useCallback((tarefa) => {
     if (isPatrao) {
@@ -582,13 +615,13 @@ function Dashboard({
     if (!painel?.inventario) return [];
 
     const alimentos = painel.inventario.alimentos?.map((item) => ({
-      categoria: `🍎 ${item.categoria}`,
+      categoria: item.categoria,
       cobertura: item.coberturaDias || 0,
       tipo: 'Alimentos'
     })) || [];
 
     const limpeza = painel.inventario.limpeza?.map((item) => ({
-      categoria: `🧼 ${item.categoria}`,
+      categoria: item.categoria,
       cobertura: item.coberturaDias || 0,
       tipo: 'Limpeza'
     })) || [];
@@ -650,10 +683,21 @@ function Dashboard({
         };
       });
 
-    return {
-      alimentos: normalizar(painel?.inventarioDetalhado?.alimentos || []),
-      limpeza: normalizar(painel?.inventarioDetalhado?.limpeza || [])
-    };
+    const tiposDisponiveis = Object.keys(painel?.inventarioDetalhado || {});
+    const resultado = tiposDisponiveis.reduce((acc, tipo) => {
+      acc[tipo] = normalizar(painel.inventarioDetalhado?.[tipo] || []);
+      return acc;
+    }, {});
+
+    if (!resultado.alimentos) {
+      resultado.alimentos = normalizar(painel?.inventarioDetalhado?.alimentos || []);
+    }
+
+    if (!resultado.limpeza) {
+      resultado.limpeza = normalizar(painel?.inventarioDetalhado?.limpeza || []);
+    }
+
+    return resultado;
   }, [painel]);
 
   const estoqueAgrupadoPorCategoria = useMemo(() => {
@@ -682,60 +726,85 @@ function Dashboard({
       }));
     };
 
-    return {
-      alimentos: agrupar(inventarioDetalhado.alimentos),
-      limpeza: agrupar(inventarioDetalhado.limpeza)
-    };
+    return Object.entries(inventarioDetalhado).reduce((acc, [tipo, lista]) => {
+      acc[tipo] = agrupar(lista);
+      return acc;
+    }, {});
   }, [inventarioDetalhado]);
 
-  const totalItensPorTipo = useMemo(
-    () => ({
-      alimentos: estoqueAgrupadoPorCategoria.alimentos.reduce((acc, grupo) => acc + grupo.itens.length, 0),
-      limpeza: estoqueAgrupadoPorCategoria.limpeza.reduce((acc, grupo) => acc + grupo.itens.length, 0)
-    }),
-    [estoqueAgrupadoPorCategoria]
-  );
+  const totalItensPorTipo = useMemo(() => {
+    const totais = {};
+    Object.entries(estoqueAgrupadoPorCategoria).forEach(([tipo, grupos]) => {
+      totais[tipo] = grupos.reduce((acc, grupo) => acc + grupo.itens.length, 0);
+    });
+    return totais;
+  }, [estoqueAgrupadoPorCategoria]);
 
   const estoqueDetalheSelecionado = estoqueAgrupadoPorCategoria[estoqueTipoSelecionado] || [];
 
+  const estoqueVisaoASG = useMemo(() => {
+    if (!isASG) return [];
+    return Object.entries(estoqueAgrupadoPorCategoria).map(([tipo, grupos]) => {
+      const destaque = grupos
+        .slice()
+        .sort((a, b) => b.totalQuantidade - a.totalQuantidade)
+        .map((grupo) => ({
+          categoria: grupo.categoria,
+          quantidade: grupo.totalQuantidade,
+          itensMonitorados: grupo.itens.length
+        }))
+        .slice(0, 4);
+
+      return {
+        tipo,
+        nome: ESTOQUE_LABELS[tipo] || formatarNomeEstoque(tipo),
+        totalCategorias: grupos.length,
+        destaque
+      };
+    });
+  }, [estoqueAgrupadoPorCategoria, isASG]);
+
   useEffect(() => {
-    if (
-      estoqueTipoSelecionado === 'alimentos' &&
-      !estoqueAgrupadoPorCategoria.alimentos.length &&
-      estoqueAgrupadoPorCategoria.limpeza.length
-    ) {
-      setEstoqueTipoSelecionado('limpeza');
-    }
-    if (
-      estoqueTipoSelecionado === 'limpeza' &&
-      !estoqueAgrupadoPorCategoria.limpeza.length &&
-      estoqueAgrupadoPorCategoria.alimentos.length
-    ) {
-      setEstoqueTipoSelecionado('alimentos');
+    const tipos = Object.keys(estoqueAgrupadoPorCategoria);
+    if (!tipos.length) return;
+
+    const atualDisponivel = estoqueAgrupadoPorCategoria[estoqueTipoSelecionado]?.length;
+    if (!atualDisponivel) {
+      const primeiroDisponivel = tipos.find((tipo) => estoqueAgrupadoPorCategoria[tipo].length);
+      if (primeiroDisponivel && primeiroDisponivel !== estoqueTipoSelecionado) {
+        setEstoqueTipoSelecionado(primeiroDisponivel);
+      }
     }
   }, [estoqueAgrupadoPorCategoria, estoqueTipoSelecionado]);
 
-  const itensCriticosTotal = inventarioResumo.alimentos.itensCriticos + inventarioResumo.limpeza.itensCriticos;
-  const alertasAtivos = painel?.alertas?.length || 0;
-  const planilhasRecentes = painel?.planilhas?.length || 0;
-  const categoriaCriticaLimpeza = painel?.inventario?.limpeza?.find((item) => Number(item.itensCriticos || 0) > 0)?.categoria;
-  const categoriaCriticaAlimentos = painel?.inventario?.alimentos?.find((item) => Number(item.itensCriticos || 0) > 0)?.categoria;
-  const ultimaPlanilha = painel?.planilhas?.[0];
-
-  const tarefas48h = useMemo(() => {
-    if (!painel?.cronograma) {
-      return 0;
+  const cronogramaResumo = useMemo(() => {
+    if (!painel?.cronograma || !painel.cronograma.length) {
+      return [];
     }
 
-    const agora = new Date();
-    const limite = new Date();
-    limite.setDate(agora.getDate() + 2);
+    const mapa = new Map();
 
-    return painel.cronograma.filter((item) => {
-      if (!item.data) return false;
-      const dataItem = parseISO(item.data);
-      return dataItem >= agora && dataItem <= limite;
-    }).length;
+    painel.cronograma.forEach((item) => {
+      const chave = item.tipo || 'Atividades';
+      const existente = mapa.get(chave) || {
+        tipo: chave,
+        quantidade: 0,
+        responsaveis: new Set()
+      };
+
+      existente.quantidade += 1;
+      if (item.responsavel) {
+        existente.responsaveis.add(item.responsavel);
+      }
+
+      mapa.set(chave, existente);
+    });
+
+    return Array.from(mapa.values()).map((registro) => ({
+      tipo: registro.tipo,
+      quantidade: registro.quantidade,
+      responsaveis: registro.responsaveis.size ? Array.from(registro.responsaveis).join(', ') : 'Equipe'
+    }));
   }, [painel]);
 
   if (carregando && !painel) {
@@ -768,7 +837,7 @@ function Dashboard({
           </div>
 
           <button type="button" className="btn-atualizar" onClick={carregarPainel}>
-            🔄 Atualizar
+            Atualizar
           </button>
         </div>
 
@@ -794,10 +863,10 @@ function Dashboard({
               onChange={(event) => setUploadResponsavel(event.target.value)}
             />
 
-            <label className="btn-upload">
-              📁 Enviar planilha
-              <input type="file" accept=".csv,.xlsx,.xls" onChange={handleUpload} />
-            </label>
+              <label className="btn-upload">
+                Enviar planilha
+                <input type="file" accept=".csv,.xlsx,.xls" onChange={handleUpload} />
+              </label>
           </div>
         )}
       </div>
@@ -810,122 +879,59 @@ function Dashboard({
 
       {painel && (
         <>
-          {isASG ? (
-            <>
-              <section className="kpis">
-                <article className="kpi-card">
-                  <div className="kpi-icon estoque">🥕</div>
-                  <div>
-                    <h4>Cobertura de alimentos</h4>
-                    <p className="kpi-valor">{`${inventarioResumo.alimentos.coberturaMedia || 0} dias`}</p>
-                    <span>{inventarioResumo.alimentos.itensCriticos} itens críticos</span>
-                  </div>
-                </article>
-
-                <article className="kpi-card">
-                  <div className="kpi-icon limpeza">🧴</div>
-                  <div>
-                    <h4>Cobertura de limpeza</h4>
-                    <p className="kpi-valor">{`${inventarioResumo.limpeza.coberturaMedia || 0} dias`}</p>
-                    <span>{inventarioResumo.limpeza.itensCriticos} itens críticos</span>
-                  </div>
-                </article>
-
-                <article className="kpi-card">
-                  <div className="kpi-icon alerta">🚨</div>
-                  <div>
-                    <h4>Alertas abertos</h4>
-                    <p className="kpi-valor">{alertasAtivos}</p>
-                    <span>Priorize itens com nível crítico</span>
-                  </div>
-                </article>
-
-                <article className="kpi-card">
-                  <div className="kpi-icon planilhas">📥</div>
-                  <div>
-                    <h4>Planilhas importadas</h4>
-                    <p className="kpi-valor">{planilhasRecentes}</p>
-                    <span>Último envio: {ultimaPlanilha?.enviadoPor || 'Equipe'}</span>
-                  </div>
-                </article>
-              </section>
-
-              <section className="cards-secundarios">
-                <div className="card pequeno">
-                  <h3>🗓️ Tarefas próximas (48h)</h3>
-                  <p>{tarefas48h}</p>
-                </div>
-                <div className="card pequeno">
-                  <h3>🧽 Categoria crítica (limpeza)</h3>
-                  <p>{categoriaCriticaLimpeza || 'Tudo em ordem'}</p>
-                </div>
-                <div className="card pequeno">
-                  <h3>🥗 Categoria crítica (dispensa)</h3>
-                  <p>{categoriaCriticaAlimentos || 'Tudo em ordem'}</p>
-                </div>
-                <div className="card pequeno">
-                  <h3>📦 Próximos vencimentos</h3>
-                  <p>{itensCriticosTotal > 0 ? 'Revise itens abaixo do mínimo' : 'Nenhum item crítico'}</p>
-                </div>
-              </section>
-            </>
-          ) : (
+          {!isASG && (
             <>
               {mostrarKPIs && (
                 <section className="kpis">
                   <article className="kpi-card">
-                    <div className="kpi-icon residentes">👵</div>
-                    <div>
-                      <h4>Residentes Ativos</h4>
-                      <p className="kpi-valor">{formatarNumero(painel.resumo?.residentesAtivos)}</p>
-                      <span>{formatarNumero(painel.resumo?.residentesObservacao)} em observação</span>
-                    </div>
+                    <header>
+                      <span className="kpi-card__titulo">Residentes ativos</span>
+                      <strong className="kpi-card__valor">{formatarNumero(painel.resumo?.residentesAtivos)}</strong>
+                    </header>
+                    <p>{formatarNumero(painel.resumo?.residentesObservacao)} em observação</p>
                   </article>
 
                   <article className="kpi-card">
-                    <div className="kpi-icon ocupacao">🏥</div>
-                    <div>
-                      <h4>Taxa de Ocupação</h4>
-                      <p className="kpi-valor">{formatarPercentual(painel.resumo?.taxaOcupacao)}</p>
-                      <span>{formatarNumero(painel.resumo?.residentesInternados)} residentes internados</span>
-                    </div>
+                    <header>
+                      <span className="kpi-card__titulo">Taxa de ocupação</span>
+                      <strong className="kpi-card__valor">{formatarPercentual(painel.resumo?.taxaOcupacao)}</strong>
+                    </header>
+                    <p>{formatarNumero(painel.resumo?.residentesInternados)} residentes internados</p>
                   </article>
 
                   <article className="kpi-card">
-                    <div className="kpi-icon saude">💊</div>
-                    <div>
-                      <h4>Adesão à Medicação</h4>
-                      <p className="kpi-valor">{formatarPercentual(painel.resumo?.taxaMedicacao)}</p>
-                      <span>{formatarNumero(painel.resumo?.incidentesClinicos)} incidentes clínicos</span>
-                    </div>
+                    <header>
+                      <span className="kpi-card__titulo">Adesão à medicação</span>
+                      <strong className="kpi-card__valor">{formatarPercentual(painel.resumo?.taxaMedicacao)}</strong>
+                    </header>
+                    <p>{formatarNumero(painel.resumo?.incidentesClinicos)} incidentes clínicos</p>
                   </article>
 
                   <article className="kpi-card">
-                    <div className="kpi-icon bem-estar">💚</div>
-                    <div>
-                      <h4>Bem-estar médio</h4>
-                      <p className="kpi-valor">{Number(painel.resumo?.bemEstarMedio || 0).toFixed(1)}</p>
-                      <span>{formatarPercentual(painel.resumo?.taxaObito)} taxa de óbito</span>
-                    </div>
+                    <header>
+                      <span className="kpi-card__titulo">Bem-estar médio</span>
+                      <strong className="kpi-card__valor">{Number(painel.resumo?.bemEstarMedio || 0).toFixed(1)}</strong>
+                    </header>
+                    <p>Taxa de óbito {formatarPercentual(painel.resumo?.taxaObito)}</p>
                   </article>
                 </section>
               )}
 
               <section className="cards-secundarios">
                 <div className="card pequeno">
-                  <h3>📅 Próxima consulta médica</h3>
+                  <h3>Próxima consulta médica</h3>
                   <p>{painel.resumo?.proximaConsulta ? format(parseISO(painel.resumo.proximaConsulta), 'dd/MM/yyyy') : 'Sem registro'}</p>
                 </div>
                 <div className="card pequeno">
-                  <h3>🤝 Encontros familiares</h3>
+                  <h3>Encontros familiares</h3>
                   <p>{formatarNumero(painel.resumo?.encontrosFamiliares)}</p>
                 </div>
                 <div className="card pequeno">
-                  <h3>🩺 Atendimentos clínicos</h3>
+                  <h3>Atendimentos clínicos</h3>
                   <p>{formatarNumero(painel.resumo?.atendimentosClinicos)}</p>
                 </div>
                 <div className="card pequeno">
-                  <h3>🚑 Internações no período</h3>
+                  <h3>Internações no período</h3>
                   <p>{formatarNumero(painel.resumo?.internacoesPeriodo)}</p>
                 </div>
               </section>
@@ -939,7 +945,7 @@ function Dashboard({
                   <h3>Validação de atividades</h3>
                   <p>Acompanhe as rotinas lançadas pelo gestor e confirme as entregas da equipe.</p>
                 </div>
-                {(isPatrao || isSupervisora) ? (
+                {(isPatrao || isSupervisora) && (
                   <div className="operacional-card__filtros">
                     <label>
                       Equipe
@@ -980,27 +986,47 @@ function Dashboard({
                       Atualizar
                     </button>
                   </div>
+                )}
+              </div>
+
+              <div className="operacional-card__meta">
+                <span>
+                  <strong>{resumoTarefas.concluidas}</strong> concluídas
+                </span>
+                <span>
+                  <strong>{resumoTarefas.pendentes}</strong> pendentes
+                </span>
+                {colaboradorAtualNome && <span>Colaborador ativo: {colaboradorAtualNome}</span>}
+
+                {isSupervisora ? (
+                  <div className="tarefas-toggle">
+                    <button
+                      type="button"
+                      className={modoTarefas === 'equipe' ? 'ativo' : ''}
+                      onClick={() => setModoTarefas('equipe')}
+                    >
+                      Visão da equipe
+                    </button>
+                    <button
+                      type="button"
+                      className={modoTarefas === 'pessoais' ? 'ativo' : ''}
+                      onClick={() => setModoTarefas('pessoais')}
+                    >
+                      Atribuídas a mim
+                    </button>
+                  </div>
                 ) : (
-                  <div className="operacional-card__meta">
-                    <span>
-                      <strong>{resumoTarefas.concluidas}</strong> concluídas
-                    </span>
-                    <span>
-                      <strong>{resumoTarefas.pendentes}</strong> pendentes
-                    </span>
-                    {colaboradorAtualNome && <span>Colaborador ativo: {colaboradorAtualNome}</span>}
-                    <div className="operacional-card__acoes">
-                      {onSolicitarTrocaMembro && (
-                        <button type="button" className="secondary-button" onClick={onSolicitarTrocaMembro}>
-                          Trocar colaborador
-                        </button>
-                      )}
-                      {onAtualizarEquipe && (
-                        <button type="button" className="secondary-button" onClick={onAtualizarEquipe}>
-                          Atualizar equipe
-                        </button>
-                      )}
-                    </div>
+                  <div className="operacional-card__acoes">
+                    {onSolicitarTrocaMembro && (
+                      <button type="button" className="secondary-button" onClick={onSolicitarTrocaMembro}>
+                        Trocar colaborador
+                      </button>
+                    )}
+                    {onAtualizarEquipe && (
+                      <button type="button" className="secondary-button" onClick={onAtualizarEquipe}>
+                        Atualizar equipe
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1010,9 +1036,9 @@ function Dashboard({
 
               {tarefasCarregando ? (
                 <div className="estado-carregando">Carregando tarefas...</div>
-              ) : tarefas.length ? (
+              ) : tarefasVisiveis.length ? (
                 <ul className="lista-tarefas">
-                  {tarefas.map((tarefa) => {
+                  {tarefasVisiveis.map((tarefa) => {
                     const status = obterStatusTarefa(tarefa);
                     const statusLabel = STATUS_LABELS[status] || status;
                     const dataLimiteFormatada = formatarDataSimples(tarefa.dataLimite);
@@ -1031,11 +1057,6 @@ function Dashboard({
                             <span>{recorrenciaLabel}</span>
                             <span>{destinoResumo}</span>
                             {dataLimiteFormatada && <span>Limite: {dataLimiteFormatada}</span>}
-                            {tarefa.documentoUrl && (
-                              <a href={tarefa.documentoUrl} target="_blank" rel="noreferrer">
-                                Documento
-                              </a>
-                            )}
                           </div>
                           {tarefa.destinatarios && tarefa.destinatarios.length > 0 && (
                             <div className="tarefa-card__destinatarios">
@@ -1137,6 +1158,7 @@ function Dashboard({
                         <option value="unica">Única</option>
                         <option value="diaria">Diária</option>
                         <option value="semanal">Semanal</option>
+                        <option value="mensal">Mensal</option>
                       </select>
                     </div>
                     <div>
@@ -1161,41 +1183,37 @@ function Dashboard({
                         onChange={(event) => setNovaTarefa((prev) => ({ ...prev, dataLimite: event.target.value }))}
                       />
                     </div>
-                    <div>
-                      <label htmlFor="tarefa-documento">Documento / link (opcional)</label>
-                      <input
-                        id="tarefa-documento"
-                        type="url"
-                        placeholder="https://..."
-                        value={novaTarefa.documentoUrl}
-                        onChange={(event) => setNovaTarefa((prev) => ({ ...prev, documentoUrl: event.target.value }))}
-                      />
-                    </div>
                     {novaTarefa.destinoTipo === 'individual' && (
                       <div className="form-nova-tarefa__full">
                         <label htmlFor="tarefa-destinatarios">Colaboradores</label>
                         {colaboradoresDisponiveis.length ? (
-                          <select
-                            id="tarefa-destinatarios"
-                            multiple
-                            value={novaTarefa.destinatarios.map(String)}
-                            onChange={(event) => {
-                              const selecionados = Array.from(event.target.selectedOptions).map((option) =>
-                                Number(option.value)
+                          <div className="destinatarios-lista" role="group" aria-labelledby="tarefa-destinatarios">
+                            {colaboradoresDisponiveis.map((membro) => {
+                              const idNumero = Number(membro.id);
+                              const selecionado = novaTarefa.destinatarios.includes(idNumero);
+                              return (
+                                <label key={membro.id} className="destinatarios-item">
+                                  <input
+                                    type="checkbox"
+                                    checked={selecionado}
+                                    onChange={() =>
+                                      setNovaTarefa((prev) => {
+                                        const presente = prev.destinatarios.includes(idNumero);
+                                        const lista = presente
+                                          ? prev.destinatarios.filter((valor) => valor !== idNumero)
+                                          : [...prev.destinatarios, idNumero];
+                                        return { ...prev, destinatarios: lista };
+                                      })
+                                    }
+                                  />
+                                  <span>{membro.nome}</span>
+                                </label>
                               );
-                              setNovaTarefa((prev) => ({ ...prev, destinatarios: selecionados }));
-                            }}
-                          >
-                            {colaboradoresDisponiveis.map((membro) => (
-                              <option key={membro.id} value={membro.id}>
-                                {membro.nome}
-                              </option>
-                            ))}
-                          </select>
+                            })}
+                          </div>
                         ) : (
                           <div className="texto-suporte">Nenhum colaborador disponível para seleção.</div>
                         )}
-                        <span className="texto-ajuda">Use Ctrl/Cmd para selecionar vários nomes.</span>
                       </div>
                     )}
                     {novaTarefa.destinoTipo === 'equipe' && (
@@ -1262,7 +1280,6 @@ function Dashboard({
                     <select id="ponto-tipo" value={tipoPonto} onChange={(event) => setTipoPonto(event.target.value)}>
                       <option value="entrada">Entrada</option>
                       <option value="saida">Saída</option>
-                      <option value="intervalo">Intervalo</option>
                     </select>
                   </div>
                   <div className="form-ponto__observacao">
@@ -1288,26 +1305,28 @@ function Dashboard({
               {pontosCarregando ? (
                 <div className="estado-carregando">Carregando registros...</div>
               ) : pontos.length ? (
-                <ul className="lista-pontos">
-                  {pontos.map((registro) => (
-                    <li key={registro.id} className={`ponto-item ponto-item--${registro.tipo}`}>
-                      <div className="ponto-item__cabecalho">
-                        <strong>{registro.membroNome || 'Equipe'}</strong>
-                        <span>{ROLE_NOMES[registro.role] || 'Equipe'}</span>
-                      </div>
-                      <div className="ponto-item__meta">
-                        <span>{formatarDataHora(registro.registradoEm)}</span>
-                        <span className={`tag-ponto tag-ponto--${registro.tipo}`}>{registro.tipo}</span>
-                      </div>
-                      {registro.usuarioNome && (
-                        <span className="ponto-item__registrado-por">
-                          Registrado por {registro.usuarioNome}
-                        </span>
-                      )}
-                      {registro.observacao && <p>{registro.observacao}</p>}
-                    </li>
-                  ))}
-                </ul>
+                <div className="lista-pontos__container">
+                  <ul className="lista-pontos">
+                    {pontos.map((registro) => (
+                      <li key={registro.id} className={`ponto-item ponto-item--${registro.tipo}`}>
+                        <div className="ponto-item__cabecalho">
+                          <strong>{registro.membroNome || 'Equipe'}</strong>
+                          <span>{ROLE_NOMES[registro.role] || 'Equipe'}</span>
+                        </div>
+                        <div className="ponto-item__meta">
+                          <span>{formatarDataHora(registro.registradoEm)}</span>
+                          <span className={`tag-ponto tag-ponto--${registro.tipo}`}>{registro.tipo}</span>
+                        </div>
+                        {registro.usuarioNome && (
+                          <span className="ponto-item__registrado-por">
+                            Registrado por {registro.usuarioNome}
+                          </span>
+                        )}
+                        {registro.observacao && <p>{registro.observacao}</p>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : (
                 <div className="operacional-card__vazio">Nenhum registro de ponto no período selecionado.</div>
               )}
@@ -1318,7 +1337,7 @@ function Dashboard({
             {mostrarSaude && (
               <div className="grafico-card">
                 <div className="grafico-header">
-                  <h3>🩺 Tendências de Saúde Diária</h3>
+                  <h3>Tendências de saúde diária</h3>
                   <span>Pressão, batimentos e glicemia</span>
                 </div>
                 <ResponsiveContainer width="100%" height={300}>
@@ -1340,7 +1359,7 @@ function Dashboard({
             {mostrarSaude && (
               <div className="grafico-card">
                 <div className="grafico-header">
-                  <h3>📉 Óbitos e Internações por mês</h3>
+                  <h3>Óbitos e internações por mês</h3>
                   <span>Panorama dos últimos 12 meses</span>
                 </div>
                 <ResponsiveContainer width="100%" height={300}>
@@ -1370,7 +1389,7 @@ function Dashboard({
             {mostrarSaude && (
               <div className="grafico-card">
                 <div className="grafico-header">
-                  <h3>📈 Ocupação Semanal</h3>
+                  <h3>Evolução semanal da ocupação</h3>
                   <span>Monitoramento das últimas 12 semanas</span>
                 </div>
                 <ResponsiveContainer width="100%" height={260}>
@@ -1390,7 +1409,7 @@ function Dashboard({
             {mostrarMedicacao && (
               <div className="grafico-card">
                 <div className="grafico-header">
-                  <h3>💊 Adesão à medicação por ala</h3>
+                  <h3>Adesão à medicação por ala</h3>
                   <span>Média do período selecionado</span>
                 </div>
                 <ResponsiveContainer width="100%" height={260}>
@@ -1406,50 +1425,80 @@ function Dashboard({
             )}
 
             {mostrarEstoque && (
-              <div className="grafico-card">
-                <div className="grafico-header">
-                  <h3>🥗 Cobertura de Estoques</h3>
-                  <span>Dias de autonomia por categoria</span>
-                </div>
-                <ResponsiveContainer width="100%" height={260}>
-                  <BarChart data={inventarioCobertura} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="categoria" tick={{ fontSize: 12 }} interval={0} angle={-20} textAnchor="end" height={70} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#fde68a' }} formatter={(value) => `${value} dias`} />
-                    <Legend />
-                    <Bar dataKey="cobertura" name="Dias de cobertura" fill="#f59e0b" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            <div className="grafico-card alertas">
-              <div className="grafico-header">
-                <h3>🚨 Alertas ativos</h3>
-                <span>Priorize tratativas críticas</span>
-              </div>
-              <ul className="lista-alertas">
-                {painel.alertas && painel.alertas.length > 0 ? (
-                  painel.alertas.map((alerta, index) => (
-                    <li key={`${alerta.tipo}-${index}`} className={`alerta ${alerta.severidade || 'media'}`}>
-                      <strong>{alerta.tipo}</strong>
-                      <p>{alerta.mensagem}</p>
-                      {alerta.criado_em && <span>{format(parseISO(alerta.criado_em), 'dd/MM HH:mm')}</span>}
-                    </li>
-                  ))
+              <>
+                {isASG ? (
+                  <section className="estoque-simples">
+                    {estoqueVisaoASG.length ? (
+                      estoqueVisaoASG.map((grupo) => (
+                        <article key={grupo.tipo} className="estoque-simples__card">
+                          <header>
+                            <div>
+                              <h4>{grupo.nome}</h4>
+                              <span>{grupo.totalCategorias} categorias monitoradas</span>
+                            </div>
+                          </header>
+                          <ul>
+                            {grupo.destaque.map((categoria) => (
+                              <li key={`${grupo.tipo}-${categoria.categoria}`}>
+                                <strong>{categoria.categoria}</strong>
+                                <span>{formatarNumero(categoria.quantidade)} unidades</span>
+                                <small>{categoria.itensMonitorados} itens cadastrados</small>
+                              </li>
+                            ))}
+                          </ul>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="estoque-simples__vazio">Nenhum estoque disponível para o período.</div>
+                    )}
+                  </section>
                 ) : (
-                  <li className="alerta vazio">Nenhum alerta crítico no momento.</li>
+                  <div className="grafico-card">
+                    <div className="grafico-header">
+                      <h3>Cobertura de estoques</h3>
+                      <span>Dias de autonomia por categoria</span>
+                    </div>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={inventarioCobertura} margin={{ top: 10, right: 20, bottom: 10, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="categoria" tick={{ fontSize: 12 }} interval={0} angle={-20} textAnchor="end" height={70} />
+                        <YAxis tick={{ fontSize: 12 }} />
+                        <Tooltip contentStyle={{ borderRadius: 12, borderColor: '#fde68a' }} formatter={(value) => `${value} dias`} />
+                        <Legend />
+                        <Bar dataKey="cobertura" name="Dias de cobertura" fill="#f59e0b" radius={[8, 8, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 )}
-              </ul>
-            </div>
+
+                <div className="grafico-card alertas">
+                  <div className="grafico-header">
+                    <h3>Alertas ativos</h3>
+                    <span>Priorize tratativas críticas</span>
+                  </div>
+                  <ul className="lista-alertas">
+                    {painel.alertas && painel.alertas.length > 0 ? (
+                      painel.alertas.map((alerta, index) => (
+                        <li key={`${alerta.tipo}-${index}`} className={`alerta ${alerta.severidade || 'media'}`}>
+                          <strong>{alerta.tipo}</strong>
+                          <p>{alerta.mensagem}</p>
+                          {alerta.criado_em && <span>{format(parseISO(alerta.criado_em), 'dd/MM HH:mm')}</span>}
+                        </li>
+                      ))
+                    ) : (
+                      <li className="alerta vazio">Nenhum alerta crítico no momento.</li>
+                    )}
+                  </ul>
+                </div>
+              </>
+            )}
           </section>
 
           {isPatrao && (
             <section className="estoque-detalhado">
               <div className="estoque-detalhado__header">
                 <div>
-                  <h3>📦 Estoque detalhado por seção</h3>
+                  <h3>Estoque detalhado por seção</h3>
                   <p>Visualize a disponibilidade de cada item agrupado por categoria operacional.</p>
                 </div>
                 <div className="estoque-detalhado__resumo">
@@ -1461,28 +1510,20 @@ function Dashboard({
               </div>
 
               <div className="estoque-detalhado__tabs">
-                <button
-                  type="button"
-                  className={
-                    estoqueTipoSelecionado === 'alimentos'
-                      ? 'estoque-detalhado__tab ativo'
-                      : 'estoque-detalhado__tab'
-                  }
-                  onClick={() => setEstoqueTipoSelecionado('alimentos')}
-                >
-                  🥕 Alimentos
-                </button>
-                <button
-                  type="button"
-                  className={
-                    estoqueTipoSelecionado === 'limpeza'
-                      ? 'estoque-detalhado__tab ativo'
-                      : 'estoque-detalhado__tab'
-                  }
-                  onClick={() => setEstoqueTipoSelecionado('limpeza')}
-                >
-                  🧼 Produtos de limpeza
-                </button>
+                {Object.keys(estoqueAgrupadoPorCategoria).map((tipo) => (
+                  <button
+                    type="button"
+                    key={tipo}
+                    className={
+                      estoqueTipoSelecionado === tipo
+                        ? 'estoque-detalhado__tab ativo'
+                        : 'estoque-detalhado__tab'
+                    }
+                    onClick={() => setEstoqueTipoSelecionado(tipo)}
+                  >
+                    {ESTOQUE_LABELS[tipo] || formatarNomeEstoque(tipo)}
+                  </button>
+                ))}
               </div>
 
               {estoqueDetalheSelecionado.length ? (
@@ -1513,50 +1554,49 @@ function Dashboard({
                           {categoriaCritica && <span className="estoque-detalhado__badge">atenção</span>}
                         </header>
 
-                        <ul className="estoque-detalhado__lista">
-                          {categoria.itens.map((item) => {
-                            const itemCritico =
-                              Number(item.quantidadeAtual || 0) <= 0 ||
-                              (item.coberturaDias !== null &&
-                                item.coberturaDias !== undefined &&
-                                Number(item.coberturaDias) <= 2);
+                        <div className="estoque-tabela__container">
+                          <table className="estoque-tabela">
+                            <thead>
+                              <tr>
+                                <th>Item</th>
+                                <th>Quantidade</th>
+                                <th>Cobertura</th>
+                                <th>Validade</th>
+                                <th>Fornecedor</th>
+                                <th>Lote</th>
+                                <th>Observações</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {categoria.itens.map((item) => {
+                                const itemCritico =
+                                  Number(item.quantidadeAtual || 0) <= 0 ||
+                                  (item.coberturaDias !== null &&
+                                    item.coberturaDias !== undefined &&
+                                    Number(item.coberturaDias) <= 2);
 
-                            return (
-                              <li
-                                key={`${categoria.categoria}-${item.nome}`}
-                                className={itemCritico ? 'estoque-item critico' : 'estoque-item'}
-                              >
-                                <div className="estoque-item__titulo">
-                                  <strong>{item.nome}</strong>
-                                  <span>
-                                    {formatarNumero(item.quantidadeAtual)}
-                                    {item.unidade ? ` ${item.unidade}` : ''}
-                                  </span>
-                                </div>
-                                <div className="estoque-item__meta">
-                                  <span>
-                                    ⏳
-                                    {item.coberturaDias !== null && item.coberturaDias !== undefined
-                                      ? ` ${item.coberturaDias} dias`
-                                      : ' Sem previsão'}
-                                  </span>
-                                  {item.validade && (
-                                    <span>📅 {formatarDataSimples(item.validade)}</span>
-                                  )}
-                                </div>
-                                {(item.fornecedor || item.lote) && (
-                                  <div className="estoque-item__extra">
-                                    {item.fornecedor && <span>Fornecedor: {item.fornecedor}</span>}
-                                    {item.lote && <span>Lote: {item.lote}</span>}
-                                  </div>
-                                )}
-                                {item.observacoes && (
-                                  <p className="estoque-item__obs">{item.observacoes}</p>
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
+                                return (
+                                  <tr key={`${categoria.categoria}-${item.nome}`} className={itemCritico ? 'critico' : ''}>
+                                    <td>{item.nome}</td>
+                                    <td>
+                                      {formatarNumero(item.quantidadeAtual)}
+                                      {item.unidade ? ` ${item.unidade}` : ''}
+                                    </td>
+                                    <td>
+                                      {item.coberturaDias !== null && item.coberturaDias !== undefined
+                                        ? `${item.coberturaDias} dias`
+                                        : 'Sem previsão'}
+                                    </td>
+                                    <td>{item.validade ? formatarDataSimples(item.validade) : '—'}</td>
+                                    <td>{item.fornecedor || '—'}</td>
+                                    <td>{item.lote || '—'}</td>
+                                    <td>{item.observacoes || '—'}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
                       </article>
                     );
                   })}
@@ -1582,7 +1622,29 @@ function Dashboard({
 
           <section className="cronograma-inventario">
             <div className="card cronograma">
-              <h3>🗓️ Cronograma de atividades</h3>
+              <h3>Cronograma de atividades</h3>
+              {cronogramaResumo.length > 0 && (
+                <div className="cronograma-resumo">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Grupo</th>
+                        <th>Atividades no período</th>
+                        <th>Responsáveis</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cronogramaResumo.map((linha) => (
+                        <tr key={linha.tipo}>
+                          <td>{linha.tipo}</td>
+                          <td>{linha.quantidade}</td>
+                          <td>{linha.responsaveis}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
               <ul>
                 {painel.cronograma && painel.cronograma.length > 0 ? (
                   painel.cronograma.map((item, index) => {
@@ -1611,20 +1673,25 @@ function Dashboard({
 
             {mostrarPlanilhas && (
               <div className="card planilhas">
-                <h3>📎 Planilhas anexadas recentemente</h3>
+                <h3>Planilhas anexadas recentemente</h3>
                 <ul>
                   {painel.planilhas && painel.planilhas.length > 0 ? (
-                    painel.planilhas.map((planilha) => (
-                      <li key={planilha.id}>
-                        <div>
-                          <strong>{planilha.nome}</strong>
-                          <span>{planilha.enviadoPor || 'Equipe'}</span>
-                        </div>
-                        <a href={`/${planilha.caminho}`} target="_blank" rel="noreferrer">
-                          Abrir
-                        </a>
-                      </li>
-                    ))
+                    painel.planilhas.map((planilha) => {
+                      const nomeArquivo =
+                        planilha.nome || planilha.nome_original || planilha.nomeOriginal || 'Planilha enviada';
+
+                      return (
+                        <li key={planilha.id}>
+                          <div>
+                            <strong>{nomeArquivo}</strong>
+                            <span>Enviado por {planilha.enviadoPor || 'Equipe'}</span>
+                          </div>
+                          <a href={`/${planilha.caminho}`} download>
+                            Baixar arquivo
+                          </a>
+                        </li>
+                      );
+                    })
                   ) : (
                     <li className="planilha-vazia">Nenhuma planilha enviada ainda.</li>
                   )}
