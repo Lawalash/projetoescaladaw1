@@ -87,13 +87,12 @@ async function garantirSchema() {
       titulo VARCHAR(180) NOT NULL,
       descricao TEXT,
       role_destino ENUM('asg','enfermaria','supervisora') NOT NULL,
-      recorrencia ENUM('unica','diaria','semanal') DEFAULT 'unica',
+      recorrencia ENUM('unica','diaria','semanal','mensal') DEFAULT 'unica',
       destino_tipo ENUM('individual','equipe') DEFAULT 'individual',
       destino_membro_id INT NULL,
       destino_nome_snapshot VARCHAR(180) NULL,
       criado_por INT,
       data_limite DATE,
-      documento_url VARCHAR(255),
       criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
   );
@@ -103,7 +102,11 @@ async function garantirSchema() {
   ).catch(() => {});
 
   await query(
-    "ALTER TABLE tarefas ADD COLUMN recorrencia ENUM('unica','diaria','semanal') DEFAULT 'unica' AFTER role_destino"
+    "ALTER TABLE tarefas ADD COLUMN recorrencia ENUM('unica','diaria','semanal','mensal') DEFAULT 'unica' AFTER role_destino"
+  ).catch(() => {});
+
+  await query(
+    "ALTER TABLE tarefas MODIFY COLUMN recorrencia ENUM('unica','diaria','semanal','mensal') DEFAULT 'unica'"
   ).catch(() => {});
 
   await query(
@@ -138,7 +141,7 @@ async function garantirSchema() {
       membro_id INT NOT NULL,
       usuario_id INT NOT NULL,
       membro_nome VARCHAR(150),
-      tipo ENUM('entrada','saida','intervalo') DEFAULT 'entrada',
+      tipo ENUM('entrada','saida') DEFAULT 'entrada',
       registrado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       observacao VARCHAR(255)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
@@ -146,6 +149,18 @@ async function garantirSchema() {
 
   await query(
     'ALTER TABLE pontos_registros ADD COLUMN membro_nome VARCHAR(150) AFTER usuario_id'
+  ).catch(() => {});
+
+  await query(
+    "UPDATE pontos_registros SET tipo = 'saida' WHERE tipo NOT IN ('entrada','saida')"
+  ).catch(() => {});
+
+  await query(
+    "ALTER TABLE pontos_registros MODIFY COLUMN tipo ENUM('entrada','saida') DEFAULT 'entrada'"
+  ).catch(() => {});
+
+  await query(
+    "ALTER TABLE tarefas DROP COLUMN documento_url"
   ).catch(() => {});
 
   schemaPronta = true;
@@ -244,7 +259,6 @@ async function criarTarefa({
   roleDestino,
   criadoPor,
   dataLimite,
-  documentoUrl,
   recorrencia = 'unica',
   destinoTipo = 'individual',
   destinatariosIds = []
@@ -252,8 +266,8 @@ async function criarTarefa({
   await garantirSchema();
 
   const resultado = await query(
-    `INSERT INTO tarefas (titulo, descricao, role_destino, recorrencia, destino_tipo, destino_membro_id, destino_nome_snapshot, criado_por, data_limite, documento_url)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+    `INSERT INTO tarefas (titulo, descricao, role_destino, recorrencia, destino_tipo, destino_membro_id, destino_nome_snapshot, criado_por, data_limite)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
     [
       titulo,
       descricao || null,
@@ -263,8 +277,7 @@ async function criarTarefa({
       null,
       null,
       criadoPor || null,
-      dataLimite || null,
-      documentoUrl || null
+      dataLimite || null
     ]
   );
 
@@ -358,7 +371,6 @@ async function listarTarefas({ role, membroId, incluirValidacoes = false }) {
         t.recorrencia,
         t.destino_tipo AS destinoTipo,
         t.data_limite AS dataLimite,
-        t.documento_url AS documentoUrl,
         t.criado_em AS criadoEm,
         t.criado_por AS criadoPorId,
         u.nome AS criadoPorNome,
@@ -593,6 +605,9 @@ async function registrarPonto({ membroId, usuarioId, tipo, observacao, dataHora 
     throw new Error('Colaborador não encontrado para registrar o ponto.');
   }
 
+  const tipoNormalizado = typeof tipo === 'string' ? tipo.toLowerCase() : '';
+  const tipoRegistrado = tipoNormalizado === 'saida' ? 'saida' : 'entrada';
+
   await query(
     `INSERT INTO pontos_registros (membro_id, usuario_id, membro_nome, tipo, observacao, registrado_em)
      VALUES (?, ?, ?, ?, ?, ?)` ,
@@ -600,7 +615,7 @@ async function registrarPonto({ membroId, usuarioId, tipo, observacao, dataHora 
       membroId,
       usuarioId,
       membro.nome,
-      tipo || 'entrada',
+      tipoRegistrado,
       observacao || null,
       dataHora ? new Date(dataHora) : new Date()
     ]

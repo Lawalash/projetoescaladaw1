@@ -1,0 +1,209 @@
+.enfermagem-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.enfermagem-header {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 28px;
+  display: flex;
+  justify-content: space-between;
+  gap: 32px;
+  align-items: center;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+}
+
+.enfermagem-header h2 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.enfermagem-header p {
+  color: #475569;
+  line-height: 1.5;
+}
+
+.enfermagem-upload {
+  border: 1px dashed #475569;
+  border-radius: 16px;
+  padding: 16px 24px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #1e293b;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.enfermagem-upload:hover {
+  border-color: #2563eb;
+  color: #1d4ed8;
+}
+
+.enfermagem-upload input {
+  display: none;
+}
+
+.enfermagem-alerta {
+  border-radius: 16px;
+  padding: 18px 24px;
+  font-weight: 600;
+}
+
+.enfermagem-alerta.info {
+  background: #e0f2fe;
+  color: #0f172a;
+}
+
+.enfermagem-alerta.sucesso {
+  background: #dcfce7;
+  color: #14532d;
+}
+
+.enfermagem-meta {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  background: #f1f5f9;
+  border-radius: 14px;
+  padding: 10px 16px;
+}
+
+.enfermagem-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.enfermagem-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.enfermagem-card__titulo {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.enfermagem-card__titulo a {
+  font-size: 14px;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.enfermagem-card__titulo a:hover {
+  text-decoration: underline;
+}
+
+.enfermagem-card ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.enfermagem-card li {
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+
+.enfermagem-card__etapa {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #475569;
+  letter-spacing: 0.5px;
+}
+
+.enfermagem-card p {
+  margin-top: 6px;
+  color: #334155;
+  line-height: 1.4;
+}
+
+.enfermagem-form {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.enfermagem-form__grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.enfermagem-form__campo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.enfermagem-form__campo label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.enfermagem-form__campo input,
+.enfermagem-form__campo textarea {
+  border: 1px solid #cbd5f5;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.enfermagem-form__campo input:focus,
+.enfermagem-form__campo textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+
+.enfermagem-form__campo textarea {
+  resize: vertical;
+}
+
+.enfermagem-form__campo--full {
+  grid-column: 1 / -1;
+}
+
+.enfermagem-form__acoes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+.enfermagem-form__acoes button {
+  border-radius: 14px;
+  border: none;
+  padding: 12px 24px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.enfermagem-form__acoes button[type='reset'] {
+  background: #f1f5f9;
+  color: #1f2937;
+}
+
+.enfermagem-form__acoes button[type='submit'] {
+  background: #2563eb;
+  color: #ffffff;
+}
