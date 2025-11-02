@@ -4,8 +4,9 @@ import Dashboard from './components/Dashboard';
 import ConfigurarEnvio from './components/ConfigurarEnvio';
 import LoginForm from './components/LoginForm';
 import RelatorioEquipe from './components/RelatorioEquipe';
-import DocumentacaoTime from './components/DocumentacaoTime';
 import SelecionarColaboradorModal from './components/SelecionarColaboradorModal';
+import EnfermagemPlanilhas from './components/EnfermagemPlanilhas';
+import CadastroPacientes from './components/CadastroPacientes';
 import { login as loginService, obterEquipeOperacional, setAuthToken } from './services/api';
 
 const ROLE_LABELS = {
@@ -165,22 +166,26 @@ function App() {
       return [
         { id: 'dashboard', label: 'Painel integrado' },
         { id: 'relatorio', label: 'Relatório da equipe' },
-        { id: 'config', label: 'Comunicações' },
-        { id: 'documentacao', label: 'Documentação' }
+        { id: 'config', label: 'Comunicações' }
       ];
     }
 
     if (usuario.role === 'supervisora') {
       return [
         { id: 'dashboard', label: 'Painel da supervisão' },
-        { id: 'documentacao', label: 'Documentação' }
+        { id: 'relatorio', label: 'Relatório da equipe' }
       ];
     }
 
-    return [
-      { id: 'dashboard', label: usuario.role === 'asg' ? 'Operações e estoque' : 'Cuidados clínicos' },
-      { id: 'documentacao', label: 'Documentação' }
-    ];
+    if (usuario.role === 'enfermaria') {
+      return [
+        { id: 'dashboard', label: 'Cuidados clínicos' },
+        { id: 'planilhas', label: 'Modelos e importação' },
+        { id: 'pacientes', label: 'Cadastro de pacientes' }
+      ];
+    }
+
+    return [{ id: 'dashboard', label: 'Operações e estoque' }];
   }, [usuario]);
 
   const handleLogin = async ({ email, senha }) => {
@@ -281,8 +286,15 @@ function App() {
           />
         )}
         {abaAtiva === 'config' && usuario.role === 'patrao' && <ConfigurarEnvio />}
-        {abaAtiva === 'relatorio' && usuario.role === 'patrao' && <RelatorioEquipe />}
-        {abaAtiva === 'documentacao' && <DocumentacaoTime role={usuario.role} />}
+        {abaAtiva === 'relatorio' && (usuario.role === 'patrao' || usuario.role === 'supervisora') && (
+          <RelatorioEquipe role={usuario.role} />
+        )}
+        {abaAtiva === 'planilhas' && usuario.role === 'enfermaria' && (
+          <EnfermagemPlanilhas />
+        )}
+        {abaAtiva === 'pacientes' && usuario.role === 'enfermaria' && (
+          <CadastroPacientes membroAtivo={membroAtivo} />
+        )}
       </main>
 
       <footer className="App-footer">
