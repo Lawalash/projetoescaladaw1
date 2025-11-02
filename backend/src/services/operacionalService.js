@@ -32,12 +32,12 @@ async function prepararColunasDestino() {
   const possuiDestinoId = await colunaExiste('tarefas', 'destino_id');
   const possuiDestinoMembroId = await colunaExiste('tarefas', 'destino_membro_id');
 
+  // legado: algumas versões usavam destino_id
   if (possuiDestinoId && !possuiDestinoMembroId) {
-    await query(
-      'ALTER TABLE tarefas CHANGE destino_id destino_membro_id INT NULL'
-    ).catch(() => {});
+    await query('ALTER TABLE tarefas CHANGE destino_id destino_membro_id INT NULL').catch(() => {});
   }
 
+  // garante a coluna nova
   if (!(await colunaExiste('tarefas', 'destino_membro_id'))) {
     await query(
       'ALTER TABLE tarefas ADD COLUMN destino_membro_id INT NULL AFTER destino_tipo'
@@ -65,6 +65,7 @@ async function prepararColunasDestino() {
 async function garantirSchema() {
   if (schemaPronta) return;
 
+  // equipe
   await query(
     `CREATE TABLE IF NOT EXISTS equipe_membros (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -77,10 +78,12 @@ async function garantirSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
   );
 
+  // reforço o ENUM porque você já tinha migrações que alteravam isso
   await query(
     "ALTER TABLE equipe_membros MODIFY role ENUM('asg','enfermaria','supervisora') NOT NULL"
   ).catch(() => {});
 
+  // tarefas (direção / supervisão / enfermagem vão usar isso)
   await query(
     `CREATE TABLE IF NOT EXISTS tarefas (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -93,28 +96,20 @@ async function garantirSchema() {
       destino_nome_snapshot VARCHAR(180) NULL,
       criado_por INT,
       data_limite DATE,
+      documento_url VARCHAR(255) NULL,
       criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
   );
 
+  // se por acaso veio de uma base que ainda não tinha o campo de anexo
   await query(
-    "ALTER TABLE tarefas MODIFY role_destino ENUM('asg','enfermaria','supervisora') NOT NULL"
+    "ALTER TABLE tarefas ADD COLUMN documento_url VARCHAR(255) NULL AFTER data_limite"
   ).catch(() => {});
 
-  await query(
-    "ALTER TABLE tarefas ADD COLUMN recorrencia ENUM('unica','diaria','semanal','mensal') DEFAULT 'unica' AFTER role_destino"
-  ).catch(() => {});
-
-  await query(
-    "ALTER TABLE tarefas MODIFY COLUMN recorrencia ENUM('unica','diaria','semanal','mensal') DEFAULT 'unica'"
-  ).catch(() => {});
-
-  await query(
-    "ALTER TABLE tarefas ADD COLUMN destino_tipo ENUM('individual','equipe') DEFAULT 'individual' AFTER recorrencia"
-  ).catch(() => {});
-
+  // garante colunas destino_* que você está usando na API
   await prepararColunasDestino();
 
+  // validações / execuções das tarefas
   await query(
     `CREATE TABLE IF NOT EXISTS tarefas_execucoes (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -131,10 +126,12 @@ async function garantirSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
   );
 
+  // garante o snapshot
   await query(
     'ALTER TABLE tarefas_execucoes ADD COLUMN destino_nome_snapshot VARCHAR(180) AFTER concluido_em'
   ).catch(() => {});
 
+  // pontos (sem "intervalo", como você pediu)
   await query(
     `CREATE TABLE IF NOT EXISTS pontos_registros (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -147,41 +144,34 @@ async function garantirSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
   );
 
+  // caso seja uma base velha, adiciona o nome
   await query(
     'ALTER TABLE pontos_registros ADD COLUMN membro_nome VARCHAR(150) AFTER usuario_id'
   ).catch(() => {});
 
-  await query(
-    "UPDATE pontos_registros SET tipo = 'saida' WHERE tipo NOT IN ('entrada','saida')"
-  ).catch(() => {});
+  // normaliza qualquer valor diferente de entrada/saida
+  await query("UPDATE pontos_registros SET tipo = 'saida' WHERE tipo NOT IN ('entrada','saida')").catch(
+    () => {}
+  );
 
+  // e por fim troca o ENUM
   await query(
     "ALTER TABLE pontos_registros MODIFY COLUMN tipo ENUM('entrada','saida') DEFAULT 'entrada'"
   ).catch(() => {});
 
-  await query(
-    "ALTER TABLE tarefas DROP COLUMN documento_url"
-  ).catch(() => {});
-
+  // não vamos mais remover documento_url porque o front usa para anexos
   schemaPronta = true;
 }
 
 async function seedEquipeBasica(usuarioId, role) {
   const membrosPadrao = {
     asg: ['Carlos Alberto Duarte', 'Elaine Pacheco', 'Marcos Vinícius', 'Roberta Castro'],
-    enfermaria: ['Téc. Fernanda Costa'],
-    supervisora: ['Vitória Barboza Silveira']
+    enfermaria: ['Enf. Ana Lúcia', 'Téc. Pedro Almeida'],
+    supervisora: ['Supervisora Carla', 'Supervisora Beatriz']
   };
 
-  const lista = membrosPadrao[role] || [];
-  if (!lista.length) return;
-
-  const existentes = await query(
-    'SELECT COUNT(*) AS total FROM equipe_membros WHERE usuario_id = ? AND role = ?',
-    [usuarioId, role]
-  );
-
-  if (existentes?.[0]?.total >= lista.length) {
+  const lista = membrosPadrao[role];
+  if (!lista || !lista.length) {
     return;
   }
 
@@ -246,9 +236,9 @@ async function obterEquipePorRole(role) {
 
   return query(
     `SELECT em.id, em.nome, em.role, em.usuario_id AS usuarioId
-     FROM equipe_membros em
-     WHERE em.role = ? AND em.ativo = 1
-     ORDER BY em.nome ASC`,
+       FROM equipe_membros em
+      WHERE em.role = ? AND em.ativo = 1
+      ORDER BY em.nome ASC`,
     [role]
   );
 }
@@ -259,15 +249,28 @@ async function criarTarefa({
   roleDestino,
   criadoPor,
   dataLimite,
+  documentoUrl,
   recorrencia = 'unica',
   destinoTipo = 'individual',
   destinatariosIds = []
 }) {
   await garantirSchema();
 
+  // cria a tarefa base
   const resultado = await query(
-    `INSERT INTO tarefas (titulo, descricao, role_destino, recorrencia, destino_tipo, destino_membro_id, destino_nome_snapshot, criado_por, data_limite)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+    `INSERT INTO tarefas (
+        titulo,
+        descricao,
+        role_destino,
+        recorrencia,
+        destino_tipo,
+        destino_membro_id,
+        destino_nome_snapshot,
+        criado_por,
+        data_limite,
+        documento_url
+      )
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
     [
       titulo,
       descricao || null,
@@ -277,28 +280,36 @@ async function criarTarefa({
       null,
       null,
       criadoPor || null,
-      dataLimite || null
+      dataLimite || null,
+      documentoUrl || null
     ]
   );
 
   const tarefaId = resultado.insertId;
 
+  // quem vai receber?
   let membrosDestino = [];
 
+  // destino por equipe (role ⇒ todos da role)
   if (destinoTipo === 'equipe') {
     const equipe = await obterEquipePorRole(roleDestino);
     membrosDestino = equipe.map((item) => ({ id: item.id, nome: item.nome }));
   } else if (Array.isArray(destinatariosIds) && destinatariosIds.length) {
+    // destino individual com ids escolhidos
     const placeholders = destinatariosIds.map(() => '?').join(',');
     const membros = await query(
-      `SELECT id, nome, role FROM equipe_membros WHERE id IN (${placeholders}) AND ativo = 1`,
+      `SELECT id, nome, role
+         FROM equipe_membros
+        WHERE id IN (${placeholders}) AND ativo = 1`,
       destinatariosIds
     );
+
     membrosDestino = membros
       .filter((item) => item.role === roleDestino)
       .map((item) => ({ id: item.id, nome: item.nome }));
   }
 
+  // fallback: se for individual mas não veio ninguém, tenta pegar 1 da role
   if (!membrosDestino.length && destinoTipo === 'individual') {
     const equipePadrao = await obterEquipePorRole(roleDestino);
     if (equipePadrao.length === 1) {
@@ -314,6 +325,7 @@ async function criarTarefa({
     throw new Error('Nenhuma equipe ativa encontrada para o destino selecionado.');
   }
 
+  // cria as execuções
   if (membrosDestino.length) {
     const inserts = membrosDestino.flatMap((membro) => [
       tarefaId,
@@ -325,11 +337,14 @@ async function criarTarefa({
     await query(
       `INSERT INTO tarefas_execucoes (tarefa_id, membro_id, status, destino_nome_snapshot)
        VALUES ${placeholders}
-       ON DUPLICATE KEY UPDATE destino_nome_snapshot = VALUES(destino_nome_snapshot), atualizado_em = CURRENT_TIMESTAMP`,
+       ON DUPLICATE KEY UPDATE
+         destino_nome_snapshot = VALUES(destino_nome_snapshot),
+         atualizado_em = CURRENT_TIMESTAMP`,
       inserts
     );
   }
 
+  // se for só pra 1 pessoa, já deixo gravado na própria tarefa
   if (destinoTipo === 'individual') {
     const principal = membrosDestino.length === 1 ? membrosDestino[0] : null;
     await query(
@@ -340,6 +355,7 @@ async function criarTarefa({
       [principal ? principal.id : null, principal ? principal.nome : null, tarefaId]
     ).catch(() => {});
   } else {
+    // se for pra equipe, não deixo travado na tarefa
     await query(
       'UPDATE tarefas SET destino_membro_id = NULL, destino_nome_snapshot = NULL WHERE id = ? LIMIT 1',
       [tarefaId]
@@ -352,6 +368,7 @@ async function criarTarefa({
 async function listarTarefas({ role, membroId, incluirValidacoes = false }) {
   await garantirSchema();
 
+  // garante que tarefas individuais tenham execução
   await sincronizarExecucoesPendentes();
 
   const params = [];
@@ -371,6 +388,7 @@ async function listarTarefas({ role, membroId, incluirValidacoes = false }) {
         t.recorrencia,
         t.destino_tipo AS destinoTipo,
         t.data_limite AS dataLimite,
+        t.documento_url AS documentoUrl,
         t.criado_em AS criadoEm,
         t.criado_por AS criadoPorId,
         u.nome AS criadoPorNome,
@@ -394,22 +412,24 @@ async function listarTarefas({ role, membroId, incluirValidacoes = false }) {
   const ids = linhas.map((item) => item.id);
   const placeholders = ids.map(() => '?').join(',');
   const execucoes = await query(
-    `SELECT te.id,
-            te.tarefa_id AS tarefaId,
-            te.membro_id AS membroId,
-            te.status,
-            te.observacao,
-            te.anexo_url AS anexoUrl,
-            te.concluido_em AS concluidoEm,
-            te.destino_nome_snapshot AS destinoNome,
-            em.nome AS membroNome,
-            em.role AS membroRole
+    `SELECT
+        te.id,
+        te.tarefa_id AS tarefaId,
+        te.membro_id AS membroId,
+        te.status,
+        te.observacao,
+        te.anexo_url AS anexoUrl,
+        te.concluido_em AS concluidoEm,
+        te.destino_nome_snapshot AS destinoNome,
+        em.nome AS membroNome,
+        em.role AS membroRole
      FROM tarefas_execucoes te
      LEFT JOIN equipe_membros em ON em.id = te.membro_id
      WHERE te.tarefa_id IN (${placeholders})`,
     ids
   );
 
+  // execuções agrupadas por tarefa
   const mapaExecucoesPorTarefa = execucoes.reduce((acc, item) => {
     if (!acc[item.tarefaId]) {
       acc[item.tarefaId] = [];
@@ -418,44 +438,76 @@ async function listarTarefas({ role, membroId, incluirValidacoes = false }) {
     return acc;
   }, {});
 
+  // execuções indexadas por tarefa+membro (pra mostrar “minha” validação)
   const mapaExecucaoPorTarefaEMembro = execucoes.reduce((acc, item) => {
     if (item.membroId !== null && item.membroId !== undefined) {
-      acc[`${item.tarefaId}:${item.membroId}`] = item;
+      const chave = `${item.tarefaId}:${item.membroId}`;
+      acc[chave] = item;
     }
     return acc;
   }, {});
 
+  const hoje = new Date();
+
   const tarefasProcessadas = linhas
     .map((item) => {
-      const execTarefa = mapaExecucoesPorTarefa[item.id] || [];
-      const destinatarios = execTarefa.map((exec) => ({
+      const execs = mapaExecucoesPorTarefa[item.id] || [];
+
+      const destinatarios = execs.map((exec) => ({
+        id: exec.id,
         membroId: exec.membroId,
         nome: exec.destinoNome || exec.membroNome,
+        role: exec.membroRole,
         status: exec.status,
         observacao: exec.observacao,
         anexoUrl: exec.anexoUrl,
         concluidoEm: exec.concluidoEm
       }));
 
+      const totalConcluidas = Number(item.totalConcluidas || 0);
+      const dataLimite = item.dataLimite ? new Date(item.dataLimite) : null;
+      const atrasada = dataLimite ? dataLimite < hoje && totalConcluidas === 0 : false;
+
+      let status = 'pendente';
+      if (totalConcluidas > 0) {
+        status = 'concluida';
+      } else if (atrasada) {
+        status = 'atrasada';
+      }
+
       const resultado = {
-        ...item,
+        id: item.id,
+        titulo: item.titulo,
+        descricao: item.descricao,
+        roleDestino: item.roleDestino,
+        recorrencia: item.recorrencia,
+        destinoTipo: item.destinoTipo,
+        dataLimite: item.dataLimite,
+        documentoUrl: item.documentoUrl,
+        criadoEm: item.criadoEm,
+        criadoPorId: item.criadoPorId,
+        criadoPorNome: item.criadoPorNome,
+        totalConcluidas,
+        totalValidacoes: Number(item.totalValidacoes || 0),
         destinatarios,
-        totalDestinatarios: destinatarios.length,
-        validacoes: incluirValidacoes
-          ? execTarefa
-              .filter((exec) => exec.status !== 'pendente')
-              .map((exec) => ({
-                id: exec.id,
-                tarefaId: exec.tarefaId,
-                membroId: exec.membroId,
-                membroNome: exec.destinoNome || exec.membroNome,
-                status: exec.status,
-                observacao: exec.observacao,
-                anexoUrl: exec.anexoUrl,
-                concluidoEm: exec.concluidoEm
-              }))
-          : []
+        status,
+        atrasada
       };
+
+      if (incluirValidacoes) {
+        resultado.validacoes = execs
+          .filter((exec) => exec.status !== 'pendente')
+          .map((exec) => ({
+            id: exec.id,
+            tarefaId: exec.tarefaId,
+            membroId: exec.membroId,
+            membroNome: exec.destinoNome || exec.membroNome,
+            status: exec.status,
+            observacao: exec.observacao,
+            anexoUrl: exec.anexoUrl,
+            concluidoEm: exec.concluidoEm
+          }));
+      }
 
       if (membroId) {
         const chave = `${item.id}:${membroId}`;
@@ -465,15 +517,25 @@ async function listarTarefas({ role, membroId, incluirValidacoes = false }) {
       return resultado;
     })
     .filter((item) => {
+      // direção vê tudo
       if (!membroId) return true;
+      // tarefa por equipe todo mundo da equipe precisa ver
       if (item.destinoTipo === 'equipe') return true;
+      // se for individual, só o dono
       return item.destinatarios.some((dest) => dest.membroId === membroId);
     });
 
   return tarefasProcessadas;
 }
 
-async function registrarValidacaoTarefa({ tarefaId, membroId, status, observacao, anexoUrl, membroNome }) {
+async function registrarValidacaoTarefa({
+  tarefaId,
+  membroId,
+  status,
+  observacao,
+  anexoUrl,
+  membroNome
+}) {
   await garantirSchema();
 
   const agora = new Date();
@@ -486,7 +548,15 @@ async function registrarValidacaoTarefa({ tarefaId, membroId, status, observacao
   }
 
   await query(
-    `INSERT INTO tarefas_execucoes (tarefa_id, membro_id, status, observacao, anexo_url, concluido_em, destino_nome_snapshot)
+    `INSERT INTO tarefas_execucoes (
+        tarefa_id,
+        membro_id,
+        status,
+        observacao,
+        anexo_url,
+        concluido_em,
+        destino_nome_snapshot
+     )
      VALUES (?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        status = VALUES(status),
@@ -495,9 +565,18 @@ async function registrarValidacaoTarefa({ tarefaId, membroId, status, observacao
        concluido_em = VALUES(concluido_em),
        destino_nome_snapshot = COALESCE(VALUES(destino_nome_snapshot), destino_nome_snapshot),
        atualizado_em = CURRENT_TIMESTAMP`,
-    [tarefaId, membroId || null, status, observacao || null, anexoUrl || null, concluidoEm, destinoNome]
+    [
+      tarefaId,
+      membroId || null,
+      status,
+      observacao || null,
+      anexoUrl || null,
+      concluidoEm,
+      destinoNome
+    ]
   );
 
+  // mantém o snapshot também na tarefa
   if (membroId) {
     await query(
       `UPDATE tarefas
@@ -509,11 +588,18 @@ async function registrarValidacaoTarefa({ tarefaId, membroId, status, observacao
   }
 
   const [registro] = await query(
-    `SELECT te.id, te.tarefa_id AS tarefaId, te.membro_id AS membroId, te.status, te.observacao,
-            te.anexo_url AS anexoUrl, te.concluido_em AS concluidoEm, te.destino_nome_snapshot AS destinoNome,
-            te.atualizado_em AS atualizadoEm
-     FROM tarefas_execucoes te
-     WHERE te.tarefa_id = ? AND te.membro_id <=> ?`,
+    `SELECT
+        te.id,
+        te.tarefa_id AS tarefaId,
+        te.membro_id AS membroId,
+        te.status,
+        te.observacao,
+        te.anexo_url AS anexoUrl,
+        te.concluido_em AS concluidoEm,
+        te.destino_nome_snapshot AS destinoNome,
+        te.atualizado_em AS atualizadoEm
+       FROM tarefas_execucoes te
+      WHERE te.tarefa_id = ? AND te.membro_id <=> ?`,
     [tarefaId, membroId || null]
   );
 
@@ -534,19 +620,19 @@ async function obterMembroPorNomeERole(nome, role) {
   const alvo = normalizarTexto(nome);
   if (!alvo) return null;
 
-  return (
-    lista.find((item) => normalizarTexto(item.nome) === alvo) || null
-  );
+  return lista.find((item) => normalizarTexto(item.nome) === alvo) || null;
 }
 
 async function sincronizarExecucoesPendentes() {
   await garantirSchema();
 
+  // pega tarefas que são individuais mas que ainda não têm registro em tarefas_execucoes
   const pendentes = await query(
-    `SELECT t.id,
-            t.role_destino AS roleDestino,
-            t.destino_membro_id AS destinoMembroId,
-            t.destino_nome_snapshot AS destinoNome
+    `SELECT
+        t.id,
+        t.role_destino AS roleDestino,
+        t.destino_membro_id AS destinoMembroId,
+        t.destino_nome_snapshot AS destinoNome
        FROM tarefas t
   LEFT JOIN tarefas_execucoes te ON te.tarefa_id = t.id
       WHERE t.destino_tipo = 'individual'
@@ -583,7 +669,9 @@ async function sincronizarExecucoesPendentes() {
     await query(
       `INSERT INTO tarefas_execucoes (tarefa_id, membro_id, status, destino_nome_snapshot)
        VALUES (?, ?, 'pendente', ?)
-       ON DUPLICATE KEY UPDATE destino_nome_snapshot = VALUES(destino_nome_snapshot), atualizado_em = CURRENT_TIMESTAMP`,
+       ON DUPLICATE KEY UPDATE
+         destino_nome_snapshot = VALUES(destino_nome_snapshot),
+         atualizado_em = CURRENT_TIMESTAMP`,
       [tarefa.id, membro.id || null, membro.nome]
     ).catch(() => {});
 
@@ -609,7 +697,14 @@ async function registrarPonto({ membroId, usuarioId, tipo, observacao, dataHora 
   const tipoRegistrado = tipoNormalizado === 'saida' ? 'saida' : 'entrada';
 
   await query(
-    `INSERT INTO pontos_registros (membro_id, usuario_id, membro_nome, tipo, observacao, registrado_em)
+    `INSERT INTO pontos_registros (
+        membro_id,
+        usuario_id,
+        membro_nome,
+        tipo,
+        observacao,
+        registrado_em
+     )
      VALUES (?, ?, ?, ?, ?, ?)` ,
     [
       membroId,
@@ -630,7 +725,9 @@ async function registrarPontosEmLote({ registros, usuarioId }) {
   }
 
   const membrosAtivos = await query(
-    `SELECT id, nome, role FROM equipe_membros WHERE ativo = 1`
+    `SELECT id, nome, role
+       FROM equipe_membros
+      WHERE ativo = 1`
   );
   const mapaMembros = new Map(
     membrosAtivos.map((membro) => [normalizarTexto(membro.nome), membro])
@@ -660,12 +757,12 @@ async function registrarPontosEmLote({ registros, usuarioId }) {
         observacao: registro.observacao,
         dataHora: registro.dataHora
       });
+
       inseridos += 1;
     } catch (error) {
       erros.push({
-        linha: registro.linha,
-        nome: registro.nome,
-        motivo: error.message
+        linha: registro,
+        erro: error.message
       });
     }
   }
@@ -682,33 +779,34 @@ async function listarPontos({ role, membroId, limite = 30 }) {
 
   const params = [];
   let where = 'WHERE 1=1';
+
   if (membroId) {
     where += ' AND pr.membro_id = ?';
     params.push(membroId);
   }
+
   if (role) {
     where += ' AND em.role = ?';
     params.push(role);
   }
 
-  const limiteSeguro = Math.max(5, Math.min(Number.parseInt(limite, 10) || 30, 200));
+  const limiteSeguro = Math.min(Number(limite) || 30, 200);
 
   const registros = await query(
-    `SELECT pr.id,
-            pr.membro_id AS membroId,
-            COALESCE(pr.membro_nome, em.nome) AS membroNome,
-            em.role,
-            pr.usuario_id AS usuarioId,
-            u.nome AS usuarioNome,
-            pr.tipo,
-            pr.observacao,
-            pr.registrado_em AS registradoEm
-     FROM pontos_registros pr
-     LEFT JOIN equipe_membros em ON em.id = pr.membro_id
-     LEFT JOIN usuarios u ON u.id = pr.usuario_id
-     ${where}
-     ORDER BY pr.registrado_em DESC
-     LIMIT ${limiteSeguro}`,
+    `SELECT
+        pr.id,
+        pr.membro_id AS membroId,
+        pr.usuario_id AS usuarioId,
+        pr.membro_nome AS membroNome,
+        pr.tipo,
+        pr.registrado_em AS registradoEm,
+        pr.observacao,
+        em.role AS membroRole
+      FROM pontos_registros pr
+      LEFT JOIN equipe_membros em ON em.id = pr.membro_id
+      ${where}
+      ORDER BY pr.registrado_em DESC
+      LIMIT ${limiteSeguro}`,
     params
   );
 
@@ -721,8 +819,8 @@ async function obterMembroPorId(membroId) {
 
   const [registro] = await query(
     `SELECT id, usuario_id AS usuarioId, nome, role, ativo
-     FROM equipe_membros
-     WHERE id = ?`,
+       FROM equipe_membros
+      WHERE id = ?`,
     [membroId]
   );
 
@@ -738,7 +836,7 @@ async function membroPertenceAoUsuario(membroId, usuarioId) {
     [membroId, usuarioId]
   );
 
-  return Boolean(registro);
+  return !!registro;
 }
 
 module.exports = {
