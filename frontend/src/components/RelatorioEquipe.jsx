@@ -146,7 +146,7 @@ function RelatorioEquipe() {
     'Realizar conferência quinzenal da farmácia com dupla checagem de validade e lote.',
     'Apresentar feedback individualizado para cada colaborador com base nas métricas do painel.',
     'Reativar o plano de contingência das medicações com dupla conferência em horários de pico.',
-    'Atualizar a documentação do time com responsáveis e metas de cada turno.'
+    'Revisar responsáveis por turno e confirmar metas individuais alinhadas.'
   ];
 
   const aderenciaMedia = Number(painel?.resumo?.taxaMedicacao || 0).toFixed(1);

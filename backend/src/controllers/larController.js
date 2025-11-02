@@ -577,7 +577,6 @@ exports.criarTarefaOperacional = async (req, res) => {
       descricao,
       roleDestino,
       dataLimite,
-      documentoUrl,
       recorrencia,
       destinoTipo,
       destinatarios
@@ -595,7 +594,8 @@ exports.criarTarefaOperacional = async (req, res) => {
       return res.status(403).json({ error: 'Supervisão só pode direcionar tarefas para a equipe de ASG.' });
     }
 
-    const recorrenciaNormalizada = ['diaria', 'semanal'].includes((recorrencia || '').toLowerCase())
+    const recorrenciasValidas = ['diaria', 'semanal', 'mensal'];
+    const recorrenciaNormalizada = recorrenciasValidas.includes((recorrencia || '').toLowerCase())
       ? recorrencia.toLowerCase()
       : 'unica';
     const destinoTipoNormalizado = (destinoTipo || 'individual').toLowerCase() === 'equipe'
@@ -619,7 +619,6 @@ exports.criarTarefaOperacional = async (req, res) => {
       descricao,
       roleDestino,
       dataLimite: dataLimite || null,
-      documentoUrl: documentoUrl || null,
       criadoPor: req.user.id,
       recorrencia: recorrenciaNormalizada,
       destinoTipo: destinoTipoNormalizado,
@@ -628,7 +627,7 @@ exports.criarTarefaOperacional = async (req, res) => {
 
     const [tarefa] = await query(
       `SELECT t.id, t.titulo, t.descricao, t.role_destino AS roleDestino, t.recorrencia, t.destino_tipo AS destinoTipo,
-              t.data_limite AS dataLimite, t.documento_url AS documentoUrl, t.criado_em AS criadoEm, u.nome AS criadoPorNome
+              t.data_limite AS dataLimite, t.criado_em AS criadoEm, u.nome AS criadoPorNome
        FROM tarefas t
        LEFT JOIN usuarios u ON u.id = t.criado_por
        WHERE t.id = ?
