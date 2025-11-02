@@ -568,10 +568,295 @@ async function popularDados(connection) {
     }
   }
 
+  const usuariosPorRole = usuariosCriados.reduce((acc, usuario) => {
+    if (!acc[usuario.role]) {
+      acc[usuario.role] = usuario.id;
+    }
+    return acc;
+  }, {});
+
+  const [todosMembros] = await connection.execute(
+    'SELECT id, nome, role, usuario_id FROM equipe_membros ORDER BY role, nome'
+  );
+
+  const obterMembrosRole = (role, preferidoId = null) => {
+    const filtrados = todosMembros.filter((item) => item.role === role);
+    if (preferidoId) {
+      const preferidos = filtrados.filter((item) => item.usuario_id === preferidoId);
+      if (preferidos.length) {
+        return preferidos;
+      }
+    }
+    return filtrados;
+  };
+
+  const equipeASG = obterMembrosRole('asg', usuariosPorRole.supervisora);
+  const equipeSupervisora = obterMembrosRole('supervisora', usuariosPorRole.supervisora);
+  const equipeEnfermagem = obterMembrosRole('enfermaria', usuariosPorRole.enfermaria);
+
+  const buscarPorNome = (lista, termo) =>
+    lista.find((item) => item.nome.toLowerCase().includes(termo.toLowerCase()));
+
+  const tarefasSeed = [];
+
+  if (equipeASG.length) {
+    tarefasSeed.push({
+      titulo: 'Checklist de higienização matinal',
+      descricao: 'Executar checklist completo das áreas comuns logo na abertura.',
+      roleDestino: 'asg',
+      recorrencia: 'diaria',
+      destinoTipo: 'equipe',
+      criadoPor: usuariosPorRole.supervisora || null,
+      criadoDiasAtras: 1,
+      dataLimite: diasAtras(hoje, 0),
+      execucoes: equipeASG.map((membro, index) => ({
+        membroId: membro.id,
+        nome: membro.nome,
+        status: index < 2 ? 'concluida' : 'pendente',
+        observacao:
+          index === 0
+            ? 'Sanitização finalizada às 07h50.'
+            : index === 1
+              ? 'Área externa revisada e checada.'
+              : null,
+        concluidoDiasAtras: index < 2 ? 0 : null
+      }))
+    });
+
+    const elaine = buscarPorNome(equipeASG, 'Elaine');
+    if (elaine) {
+      tarefasSeed.push({
+        titulo: 'Repor estoque crítico da despensa',
+        descricao:
+          'Conferir planilha de alimentos e repor itens sinalizados como críticos pela enfermagem.',
+        roleDestino: 'asg',
+        recorrencia: 'semanal',
+        destinoTipo: 'individual',
+        criadoPor: usuariosPorRole.patrao || usuariosPorRole.supervisora || null,
+        criadoDiasAtras: 5,
+        dataLimite: diasAtras(hoje, -3),
+        execucoes: [
+          {
+            membroId: elaine.id,
+            nome: elaine.nome,
+            status: 'pendente'
+          }
+        ]
+      });
+    }
+
+    tarefasSeed.push({
+      titulo: 'Inventário mensal dos materiais de limpeza',
+      descricao:
+        'Atualizar o inventário consolidado e anexar alertas de vencimento quando necessário.',
+      roleDestino: 'asg',
+      recorrencia: 'mensal',
+      destinoTipo: 'equipe',
+      criadoPor: usuariosPorRole.patrao || null,
+      criadoDiasAtras: 18,
+      dataLimite: diasAtras(hoje, -5),
+      execucoes: equipeASG.map((membro, index) => ({
+        membroId: membro.id,
+        nome: membro.nome,
+        status: index === equipeASG.length - 1 ? 'nao_realizada' : 'concluida',
+        observacao:
+          index === equipeASG.length - 1
+            ? 'Aguardando retorno do colaborador para atualização final.'
+            : 'Registro preenchido na planilha base.',
+        concluidoDiasAtras: index === equipeASG.length - 1 ? null : 10
+      }))
+    });
+  }
+
+  if (equipeSupervisora.length) {
+    const supervisora = equipeSupervisora[0];
+    tarefasSeed.push({
+      titulo: 'Auditar registros de ponto da equipe ASG',
+      descricao: 'Validar marcações e sinalizar inconsistências para a direção.',
+      roleDestino: 'supervisora',
+      recorrencia: 'semanal',
+      destinoTipo: 'individual',
+      criadoPor: usuariosPorRole.patrao || null,
+      criadoDiasAtras: 3,
+      dataLimite: diasAtras(hoje, -2),
+      execucoes: [
+        {
+          membroId: supervisora.id,
+          nome: supervisora.nome,
+          status: 'pendente'
+        }
+      ]
+    });
+
+    tarefasSeed.push({
+      titulo: 'Revisar cronograma de atividades do lar',
+      descricao: 'Garantir que as atividades da equipe estejam distribuídas conforme prioridades.',
+      roleDestino: 'supervisora',
+      recorrencia: 'mensal',
+      destinoTipo: 'individual',
+      criadoPor: usuariosPorRole.patrao || null,
+      criadoDiasAtras: 12,
+      dataLimite: diasAtras(hoje, 2),
+      execucoes: [
+        {
+          membroId: supervisora.id,
+          nome: supervisora.nome,
+          status: 'concluida',
+          observacao: 'Cronograma alinhado com a equipe multidisciplinar.',
+          concluidoDiasAtras: 2
+        }
+      ]
+    });
+  }
+
+  if (equipeEnfermagem.length) {
+    const enfermeira = equipeEnfermagem[0];
+    tarefasSeed.push({
+      titulo: 'Atualizar indicadores clínicos dos residentes',
+      descricao: 'Inserir os dados consolidados na planilha mestra para geração dos KPIs.',
+      roleDestino: 'enfermaria',
+      recorrencia: 'semanal',
+      destinoTipo: 'individual',
+      criadoPor: usuariosPorRole.patrao || null,
+      criadoDiasAtras: 2,
+      dataLimite: diasAtras(hoje, -1),
+      execucoes: [
+        {
+          membroId: enfermeira.id,
+          nome: enfermeira.nome,
+          status: 'concluida',
+          observacao: 'Planilha carregada com dados da semana.',
+          concluidoDiasAtras: 1
+        }
+      ]
+    });
+
+    tarefasSeed.push({
+      titulo: 'Validar adesão medicamentosa dos pacientes prioritários',
+      descricao: 'Conferir registros de administração e sinalizar ocorrências críticas.',
+      roleDestino: 'enfermaria',
+      recorrencia: 'diaria',
+      destinoTipo: 'individual',
+      criadoPor: usuariosPorRole.supervisora || usuariosPorRole.patrao || null,
+      criadoDiasAtras: 0,
+      dataLimite: diasAtras(hoje, 0),
+      execucoes: [
+        {
+          membroId: enfermeira.id,
+          nome: enfermeira.nome,
+          status: 'pendente'
+        }
+      ]
+    });
+  }
+
+  for (const tarefa of tarefasSeed) {
+    const destinoPrincipal =
+      tarefa.destinoTipo === 'individual' && Array.isArray(tarefa.execucoes) && tarefa.execucoes.length
+        ? tarefa.execucoes[0]
+        : null;
+
+    const criadoEm = diasAtras(hoje, tarefa.criadoDiasAtras || 0);
+
+    const [resultado] = await connection.execute(
+      `INSERT INTO tarefas (titulo, descricao, role_destino, recorrencia, destino_tipo, destino_membro_id, destino_nome_snapshot, criado_por, data_limite, criado_em)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tarefa.titulo,
+        tarefa.descricao || null,
+        tarefa.roleDestino,
+        tarefa.recorrencia || 'unica',
+        tarefa.destinoTipo || 'individual',
+        destinoPrincipal ? destinoPrincipal.membroId : null,
+        destinoPrincipal ? destinoPrincipal.nome : null,
+        tarefa.criadoPor || null,
+        tarefa.dataLimite || null,
+        criadoEm
+      ]
+    );
+
+    const tarefaId = resultado.insertId;
+
+    if (Array.isArray(tarefa.execucoes) && tarefa.execucoes.length) {
+      for (const exec of tarefa.execucoes) {
+        const concluidoEm =
+          exec.status === 'concluida'
+            ? diasAtras(
+                hoje,
+                typeof exec.concluidoDiasAtras === 'number'
+                  ? exec.concluidoDiasAtras
+                  : tarefa.criadoDiasAtras || 0
+              )
+            : null;
+
+        await connection.execute(
+          `INSERT INTO tarefas_execucoes (tarefa_id, membro_id, status, observacao, anexo_url, concluido_em, destino_nome_snapshot)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            tarefaId,
+            exec.membroId || null,
+            exec.status || 'pendente',
+            exec.observacao || null,
+            exec.anexoUrl || null,
+            concluidoEm,
+            exec.nome || null
+          ]
+        );
+      }
+    }
+  }
+
+  const registrosPonto = [];
+
+  const adicionarPonto = (membro, { dias = 0, tipo = 'entrada', hora = '08:00', observacao = null } = {}) => {
+    if (!membro) return;
+    const dataRegistro = diasAtras(hoje, dias);
+    if (hora) {
+      const [horaH, horaM] = hora.split(':').map(Number);
+      dataRegistro.setHours(horaH, horaM, 0, 0);
+    }
+    registrosPonto.push([membro.id, membro.usuario_id, membro.nome, tipo, dataRegistro, observacao]);
+  };
+
+  if (equipeASG.length) {
+    for (const membro of equipeASG) {
+      adicionarPonto(membro, { dias: 0, tipo: 'entrada', hora: '07:05', observacao: 'Início do expediente' });
+      adicionarPonto(membro, { dias: 0, tipo: 'saida', hora: '16:12', observacao: 'Fim do expediente' });
+      adicionarPonto(membro, { dias: 1, tipo: 'entrada', hora: '07:03', observacao: 'Entrada registrada no ponto.' });
+      adicionarPonto(membro, { dias: 1, tipo: 'saida', hora: '16:10' });
+    }
+  }
+
+  if (equipeSupervisora.length) {
+    const supervisora = equipeSupervisora[0];
+    adicionarPonto(supervisora, { dias: 0, tipo: 'entrada', hora: '08:12', observacao: 'Reunião com direção.' });
+    adicionarPonto(supervisora, { dias: 0, tipo: 'saida', hora: '18:05', observacao: 'Encerramento das visitas.' });
+    adicionarPonto(supervisora, { dias: 1, tipo: 'entrada', hora: '08:05', observacao: 'Auditoria de escalas.' });
+    adicionarPonto(supervisora, { dias: 1, tipo: 'saida', hora: '17:52' });
+  }
+
+  if (equipeEnfermagem.length) {
+    const enfermeira = equipeEnfermagem[0];
+    adicionarPonto(enfermeira, { dias: 0, tipo: 'entrada', hora: '06:58', observacao: 'Entrega de plantão realizada.' });
+    adicionarPonto(enfermeira, { dias: 0, tipo: 'saida', hora: '15:10', observacao: 'Repasse concluído.' });
+    adicionarPonto(enfermeira, { dias: 1, tipo: 'entrada', hora: '07:02', observacao: 'Atualização de prontuários.' });
+    adicionarPonto(enfermeira, { dias: 1, tipo: 'saida', hora: '15:45' });
+  }
+
+  for (const registro of registrosPonto) {
+    await connection.execute(
+      `INSERT INTO pontos_registros (membro_id, usuario_id, membro_nome, tipo, registrado_em, observacao)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      registro
+    );
+  }
+
   const itensEstoque = [
     { tipo: 'alimentos', categoria: 'Frutas frescas', nome: 'Banana prata', unidade: 'kg', quantidade: 18, consumo: 3.5, validade: diasAtras(hoje, 6) },
     { tipo: 'alimentos', categoria: 'Proteínas', nome: 'Peito de frango', unidade: 'kg', quantidade: 25, consumo: 4.2, validade: diasAtras(hoje, 4) },
-    { tipo: 'limpeza', categoria: 'Desinfetantes', nome: 'Álcool 70%', unidade: 'L', quantidade: 12, consumo: 1.2, validade: diasAtras(hoje, 20) }
+    { tipo: 'limpeza', categoria: 'Desinfetantes', nome: 'Álcool 70%', unidade: 'L', quantidade: 12, consumo: 1.2, validade: diasAtras(hoje, 20) },
+    { tipo: 'medicamentos', categoria: 'Controle de pressão', nome: 'Losartana 50mg', unidade: 'caixas', quantidade: 12, consumo: 2, validade: diasAtras(hoje, 60) },
+    { tipo: 'medicamentos', categoria: 'Cuidados contínuos', nome: 'Insulina NPH', unidade: 'frascos', quantidade: 8, consumo: 1.5, validade: diasAtras(hoje, 25) }
   ];
 
   for (const item of itensEstoque) {
