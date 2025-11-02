@@ -8,6 +8,7 @@
     "dev": "nodemon src/index.js",
     "cron": "node cron/jobs.js",
     "db:reset": "node scripts/resetDatabase.js",
+    "db:clean": "node scripts/cleanDatabase.js",
     "test": "jest"
   },
   "keywords": [
