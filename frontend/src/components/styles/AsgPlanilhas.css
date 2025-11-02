@@ -1,0 +1,128 @@
+.asg-planilhas {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.asg-planilhas__header {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 32px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+}
+
+.asg-planilhas__header h2 {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.asg-planilhas__header p {
+  color: #475569;
+  line-height: 1.5;
+}
+
+.asg-planilhas__upload {
+  border: 1px dashed #475569;
+  border-radius: 16px;
+  padding: 16px 24px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #1e293b;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.asg-planilhas__upload:hover {
+  border-color: #2563eb;
+  color: #1d4ed8;
+}
+
+.asg-planilhas__upload input {
+  display: none;
+}
+
+.asg-planilhas__meta {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  background: #f1f5f9;
+  border-radius: 14px;
+  padding: 12px 18px;
+}
+
+.asg-planilhas__alerta {
+  border-radius: 16px;
+  padding: 18px 24px;
+  font-weight: 600;
+}
+
+.asg-planilhas__alerta.info {
+  background: #e0f2fe;
+  color: #0f172a;
+}
+
+.asg-planilhas__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.asg-planilhas__card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.asg-planilhas__card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.asg-planilhas__card-header a {
+  font-size: 14px;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.asg-planilhas__card-header a:hover {
+  text-decoration: underline;
+}
+
+.asg-planilhas__lista {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.asg-planilhas__lista li {
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+
+.asg-planilhas__etapa {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #475569;
+  letter-spacing: 0.5px;
+}
+
+.asg-planilhas__lista p {
+  margin-top: 6px;
+  color: #334155;
+  line-height: 1.4;
+}

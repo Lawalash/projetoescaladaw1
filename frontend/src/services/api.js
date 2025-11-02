@@ -94,7 +94,6 @@ export const criarTarefaOperacional = async ({
   descricao,
   roleDestino,
   dataLimite,
-  documentoUrl,
   recorrencia,
   destinoTipo,
   destinatarios
@@ -104,7 +103,6 @@ export const criarTarefaOperacional = async ({
     descricao,
     roleDestino,
     dataLimite,
-    documentoUrl,
     recorrencia,
     destinoTipo,
     destinatarios

@@ -98,11 +98,11 @@ function ConfigurarEnvio() {
   return (
     <div className="config-container">
       <div className="config-card">
-        <h2>📣 Comunicações e Alertas do Lar</h2>
+        <h2>Comunicações e alertas do lar</h2>
 
         {mensagem && (
           <div className={`mensagem ${mensagem.tipo}`}>
-            {mensagem.tipo === 'sucesso' ? '✅' : '⚠️'} {mensagem.texto}
+            {mensagem.texto}
           </div>
         )}
 
@@ -110,8 +110,8 @@ function ConfigurarEnvio() {
           <div className="form-group">
             <label>Canal de envio</label>
             <select value={tipo} onChange={(event) => setTipo(event.target.value)} className="input-select">
-              <option value="email">📧 E-mail</option>
-              <option value="whatsapp">💬 WhatsApp</option>
+              <option value="email">E-mail</option>
+              <option value="whatsapp">WhatsApp</option>
             </select>
           </div>
 
@@ -138,14 +138,14 @@ function ConfigurarEnvio() {
           </div>
 
           <button type="submit" disabled={loading} className="btn-adicionar">
-            {loading ? '⏳' : '➕'} Cadastrar contato
+            {loading ? 'Salvando...' : 'Cadastrar contato'}
           </button>
         </form>
       </div>
 
       {destinatarios.length > 0 && (
         <div className="config-card">
-          <h3>📋 Canais cadastrados</h3>
+          <h3>Canais cadastrados</h3>
 
           <div className="tabela-scroll">
             <table className="tabela-config">
@@ -162,13 +162,13 @@ function ConfigurarEnvio() {
                 {destinatarios.map((dest) => (
                   <tr key={dest.id}>
                     <td>
-                      <span className="badge">{dest.tipo_envio === 'email' ? '📧 E-mail' : '💬 WhatsApp'}</span>
+                      <span className="badge">{dest.tipo_envio === 'email' ? 'E-mail' : 'WhatsApp'}</span>
                     </td>
                     <td className="dest-text">{dest.destinatario}</td>
                     <td>{dest.responsavel || '—'}</td>
                     <td>
                       <span className={`status ${dest.ativo ? 'ativo' : 'inativo'}`}>
-                        {dest.ativo ? '🟢 Ativo' : '🔴 Inativo'}
+                        {dest.ativo ? 'Ativo' : 'Inativo'}
                       </span>
                     </td>
                     <td className="acoes-cell">
@@ -178,10 +178,10 @@ function ConfigurarEnvio() {
                         onClick={() => handleTestar(dest.tipo_envio, dest.destinatario)}
                         disabled={testando === dest.destinatario}
                       >
-                        {testando === dest.destinatario ? '⏳' : '📤'} Testar
+                        {testando === dest.destinatario ? 'Enviando...' : 'Testar'}
                       </button>
                       <button type="button" className="btn-remover" onClick={() => handleRemover(dest.id)}>
-                        🗑️ Remover
+                        Remover
                       </button>
                     </td>
                   </tr>
@@ -191,13 +191,13 @@ function ConfigurarEnvio() {
           </div>
 
           <div className="info-box">
-            <h4>ℹ️ Como utilizamos estes contatos?</h4>
+            <h4>Como utilizamos estes contatos?</h4>
             <ul>
-              <li>👨‍👩‍👧 Familiares recebem boletins de saúde, agenda e alertas importantes.</li>
-              <li>🩺 Profissionais são avisados sobre ajustes de medicação e consultas agendadas.</li>
-              <li>💬 Envie WhatsApp no formato DDI+DDD+Número (ex: 5583988887777).</li>
-              <li>📤 O botão "Testar" envia imediatamente um resumo do dia para validação.</li>
-              <li>🕒 Disparos automáticos seguem o cronograma definido pela coordenação do lar.</li>
+              <li>Familiares recebem boletins de saúde, agenda e alertas importantes.</li>
+              <li>Profissionais são avisados sobre ajustes de medicação e consultas agendadas.</li>
+              <li>Envie WhatsApp no formato DDI+DDD+Número (ex: 5583988887777).</li>
+              <li>O botão "Testar" envia imediatamente um resumo do dia para validação.</li>
+              <li>Disparos automáticos seguem o cronograma definido pela coordenação do lar.</li>
             </ul>
           </div>
         </div>
