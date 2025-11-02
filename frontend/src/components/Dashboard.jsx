@@ -334,7 +334,9 @@ function Dashboard({
         ? filtroRoleTarefa && filtroRoleTarefa !== 'todas'
           ? filtroRoleTarefa
           : undefined
-        : role;
+        : isSupervisora
+          ? filtroRoleTarefa
+          : role;
       if (roleConsulta) {
         params.role = roleConsulta;
       }

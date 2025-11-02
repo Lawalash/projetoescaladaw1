@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import Reachttps://github.com/Lawalash/projetoescaladaw1/wikit, { useCallback, useEffect, useMemo, useState } from 'react';
 import './App.css';
 import Dashboard from './components/Dashboard';
 import ConfigurarEnvio from './components/ConfigurarEnvio';
@@ -7,6 +7,7 @@ import RelatorioEquipe from './components/RelatorioEquipe';
 import SelecionarColaboradorModal from './components/SelecionarColaboradorModal';
 import EnfermagemPlanilhas from './components/EnfermagemPlanilhas';
 import CadastroPacientes from './components/CadastroPacientes';
+import AsgPlanilhas from './components/AsgPlanilhas';
 import { login as loginService, obterEquipeOperacional, setAuthToken } from './services/api';
 
 const ROLE_LABELS = {
@@ -173,6 +174,7 @@ function App() {
     if (usuario.role === 'supervisora') {
       return [
         { id: 'dashboard', label: 'Painel da supervisão' },
+        { id: 'planilhas-asg', label: 'Modelos e importação' },
         { id: 'relatorio', label: 'Relatório da equipe' }
       ];
     }
@@ -289,6 +291,7 @@ function App() {
         {abaAtiva === 'relatorio' && (usuario.role === 'patrao' || usuario.role === 'supervisora') && (
           <RelatorioEquipe role={usuario.role} />
         )}
+        {abaAtiva === 'planilhas-asg' && usuario.role === 'supervisora' && <AsgPlanilhas />}
         {abaAtiva === 'planilhas' && usuario.role === 'enfermaria' && (
           <EnfermagemPlanilhas />
         )}
